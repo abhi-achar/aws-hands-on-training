@@ -1,18 +1,26 @@
-# AWS Hands-on Training
+# AWS Hands-on Training (3 Weeks)
 
-3-week AWS hands-on training program covering serverless, IaC, and CI/CD.
+Hands-on training covering core AWS services, infrastructure automation, and CI/CD.
 
 ## Week 1: Core AWS Services
-- API Gateway, Lambda, DynamoDB, S3, CloudFront, Cognito
+| Task | Topic | Key Services |
+|------|-------|--------------|
+| 1 | REST API with Lambda | API Gateway, Lambda |
+| 2 | NoSQL Database CRUD | DynamoDB |
+| 3 | Static Website Hosting | S3 |
+| 4 | CDN & Custom Domain | CloudFront |
+| 5 | Authentication | Cognito |
+| 6 | Full-stack Integration | All above |
 
-## Week 2: Automation and DevOps
-- Task 1: Step Functions multi-step workflows
-- Task 2: AWS CDK infrastructure as code
-- Task 3: GitHub Actions CI/CD pipeline
-- Task 4: Deployment and rollback testing
+## Week 2: Automation & DevOps
+| Task | Topic | Key Services |
+|------|-------|--------------|
+| 1 | Multi-step Workflows | Step Functions, Lambda |
+| 2 | Infrastructure as Code | AWS CDK (Python) |
+| 3 | CI/CD Pipeline | GitHub Actions, CloudFormation |
 
 ## Tech Stack
 - Runtime: Python 3.12
-- IaC: AWS CDK (Python)
+- IaC: AWS CDK v2 (Python)
 - CI/CD: GitHub Actions
 - Region: ap-south-1 (Mumbai)

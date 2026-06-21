@@ -1,0 +1,143 @@
+{
+  "Comment": "E-Commerce Order Processing Pipeline",
+  "StartAt": "ValidateOrder",
+  "States": {
+    "ValidateOrder": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:353211646521:function:validate-order",
+      "Next": "IsOrderValid",
+      "ResultPath": "$"
+    },
+    "IsOrderValid": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.valid",
+          "BooleanEquals": false,
+          "Next": "OrderRejected"
+        }
+      ],
+      "Default": "CheckInventory"
+    },
+    "OrderRejected": {
+      "Type": "Fail",
+      "Cause": "Order validation failed",
+      "Error": "ValidationError"
+    },
+    "CheckInventory": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:353211646521:function:check-inventory",
+      "Next": "IsInStock",
+      "ResultPath": "$"
+    },
+    "IsInStock": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.inStock",
+          "BooleanEquals": false,
+          "Next": "NotifyBackorder"
+        }
+      ],
+      "Default": "ProcessPayment"
+    },
+    "NotifyBackorder": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:ap-south-1:353211646521:order-notifications",
+        "Subject": "Order Backordered - Items Out of Stock",
+        "Message.$": "States.Format('Items out of stock: {}. Customer: {}', States.JsonToString($.outOfStock), $.order.customerId)"
+      },
+      "ResultPath": "$.snsResult",
+      "Next": "BackorderFailed"
+    },
+    "BackorderFailed": {
+      "Type": "Fail",
+      "Cause": "Items out of stock",
+      "Error": "InventoryError"
+    },
+    "ProcessPayment": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:353211646521:function:process-payment",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PaymentFailed",
+          "ResultPath": "$.paymentError"
+        }
+      ],
+      "Next": "WaitForConfirmation",
+      "ResultPath": "$"
+    },
+    "PaymentFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:ap-south-1:353211646521:order-notifications",
+        "Subject": "Payment Failed - Order Cancelled",
+        "Message.$": "States.Format('Payment failed for customer: {}. Error: {}', $.order.customerId, $.paymentError.Cause)"
+      },
+      "ResultPath": "$.notifyResult",
+      "Next": "PaymentFailedState"
+    },
+    "PaymentFailedState": {
+      "Type": "Fail",
+      "Cause": "Payment processing failed after 3 retries",
+      "Error": "PaymentError"
+    },
+    "WaitForConfirmation": {
+      "Type": "Wait",
+      "Seconds": 3,
+      "Next": "FulfillOrder"
+    },
+    "FulfillOrder": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "SaveToDB",
+          "States": {
+            "SaveToDB": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:ap-south-1:353211646521:function:update-order",
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "SendConfirmation",
+          "States": {
+            "SendConfirmation": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "arn:aws:sns:ap-south-1:353211646521:order-notifications",
+                "Subject": "Order Confirmed!",
+                "Message.$": "States.Format('Your order is confirmed! Total: INR {}. Items will be shipped to: {}', States.JsonToString($.orderTotal), $.order.shippingAddress)"
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "OrderComplete"
+    },
+    "OrderComplete": {
+      "Type": "Pass",
+      "Parameters": {
+        "orderResult.$": "$[0]",
+        "notificationResult.$": "$[1]",
+        "finalStatus": "Order processing completed successfully"
+      },
+      "End": true
+    }
+  }
+}

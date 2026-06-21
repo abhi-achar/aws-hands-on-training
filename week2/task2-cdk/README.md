@@ -1,24 +1,86 @@
-# Task 2: Infrastructure as Code with AWS CDK
+# Task 2: Deploy Infrastructure Using AWS CDK
 
-## What was built
-- Same pipeline as Task 1, defined in Python CDK (~280 lines)
-- Single command deploys: DynamoDB + SNS + 4 Lambdas + Step Functions + IAM
-- All resources suffixed with `-cdk` to avoid conflicts
+## Goal
+Recreate the Step Functions order-processing infrastructure as code using AWS CDK in Python, then deploy it through CloudFormation.
 
-## Key Files (in repo root)
-- `cdk/order_processing_stack.py` - Stack definition
-- `lambda/step_functions/` - Lambda source
-- `app.py` - CDK entry point
-
-## CDK Highlights
-- `Code.from_inline()` - No bootstrap needed
-- `.grant_read_write_data()` - Auto IAM policies
-- `sfn.Parallel` - Concurrent execution branches
-
-## Deploy Commands
-```bash
+## Architecture
+```text
+CDK Python code
+   |
+   v
 cdk synth
-aws cloudformation create-stack --stack-name OrderProcessingStack \
-  --template-body file://cdk.out/OrderProcessingStack.template.json \
-  --capabilities CAPABILITY_NAMED_IAM
+   |
+   v
+CloudFormation template
+   |
+   v
+AWS resources:
+DynamoDB + SNS + Lambda x4 + Step Functions + IAM
 ```
+
+## Resources Created
+| Service | Resource |
+|---|---|
+| DynamoDB | order-processing-cdk |
+| SNS | order-notifications-cdk |
+| Lambda | validate-order-cdk |
+| Lambda | check-inventory-cdk |
+| Lambda | process-payment-cdk |
+| Lambda | update-order-cdk |
+| Step Functions | OrderProcessingWorkflow-CDK |
+| CloudFormation | OrderProcessingStack |
+
+## Key Files
+| File/Folder | Purpose |
+|---|---|
+| app.py | CDK app entry point |
+| cdk/order_processing_stack.py | Main CDK stack definition |
+| lambda/step_functions/ | Lambda source code used by CDK |
+| requirements.txt | Python CDK dependencies |
+| cdk.json | CDK CLI configuration |
+
+## Important CDK Concepts Used
+- `dynamodb.Table` creates the order table.
+- `sns.Topic` creates the notification topic.
+- `lambda.Function` creates each Lambda.
+- `Code.from_inline()` embeds Lambda code directly in the template to avoid CDK bootstrap constraints.
+- `order_table.grant_read_write_data(update_order_fn)` creates least-scoped DynamoDB IAM permissions.
+- `tasks.LambdaInvoke` creates Step Functions Lambda tasks.
+- `sfn.Choice`, `sfn.Fail`, `sfn.Wait`, and `sfn.Parallel` build the workflow.
+- `CfnOutput` exposes stack outputs.
+
+## Step-by-Step Setup
+1. Install Python dependencies.
+2. Verify AWS credentials for account `353211646521` and region `ap-south-1`.
+3. Run `cdk synth` to generate a CloudFormation template.
+4. Deploy the template with CloudFormation.
+5. Confirm the stack reaches `CREATE_COMPLETE` or `UPDATE_COMPLETE`.
+6. Start a Step Functions execution to validate the deployment.
+
+## How to Run Locally
+```bash
+cd week2/task2-cdk
+pip install -r requirements.txt
+cdk synth
+```
+
+## Deploy Command
+```bash
+aws cloudformation create-stack   --stack-name OrderProcessingStack   --template-body file://cdk.out/OrderProcessingStack.template.json   --capabilities CAPABILITY_NAMED_IAM   --region ap-south-1   --no-verify-ssl
+```
+
+For updates:
+```bash
+aws cloudformation update-stack   --stack-name OrderProcessingStack   --template-body file://cdk.out/OrderProcessingStack.template.json   --capabilities CAPABILITY_NAMED_IAM   --region ap-south-1   --no-verify-ssl
+```
+
+## Test Command
+```bash
+aws stepfunctions start-execution   --state-machine-arn arn:aws:states:ap-south-1:353211646521:stateMachine:OrderProcessingWorkflow-CDK   --input '{"order":{"customerId":"C001","items":[{"productId":"PROD-001","quantity":1,"price":2499}],"shippingAddress":"CDK Deployed, Bangalore"}}'   --region ap-south-1   --no-verify-ssl
+```
+
+## What to Verify
+- CloudFormation stack `OrderProcessingStack` exists.
+- Stack outputs include `StateMachineArn`, `TableName`, and `TopicArn`.
+- Step Functions execution succeeds.
+- DynamoDB table `order-processing-cdk` contains the confirmed order.

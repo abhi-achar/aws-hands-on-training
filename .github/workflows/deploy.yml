@@ -5,18 +5,18 @@ on:
   push:
     branches: [main]
     paths:
-      - 'cdk/**'
-      - 'lambda/**'
-      - 'app.py'
-      - 'requirements.txt'
+      - 'week2/task2-cdk/cdk/**'
+      - 'week2/task2-cdk/lambda/**'
+      - 'week2/task2-cdk/app.py'
+      - 'week2/task2-cdk/requirements.txt'
       - '.github/workflows/**'
   pull_request:
     branches: [main]
     paths:
-      - 'cdk/**'
-      - 'lambda/**'
-      - 'app.py'
-      - 'requirements.txt'
+      - 'week2/task2-cdk/cdk/**'
+      - 'week2/task2-cdk/lambda/**'
+      - 'week2/task2-cdk/app.py'
+      - 'week2/task2-cdk/requirements.txt'
       - '.github/workflows/**'
 
 env:
@@ -54,15 +54,15 @@ jobs:
         run: npm install -g aws-cdk
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r week2/task2-cdk/requirements.txt
 
       - name: Lint Lambda code
         run: |
           pip install flake8
-          flake8 lambda/ --max-line-length=120 --ignore=E501,W503
+          flake8 week2/task2-cdk/lambda/ --max-line-length=120 --ignore=E501,W503
 
       - name: CDK Synth
-        run: cdk synth --quiet
+        run: cd week2/task2-cdk && cdk synth --quiet
         env:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
@@ -71,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cfn-template
-          path: cdk.out/${{ env.STACK_NAME }}.template.json
+          path: week2/task2-cdk/cdk.out/${{ env.STACK_NAME }}.template.json
 
   # ─────────────────────────────────────────────────────────────────────
   # Job 2: Deploy (only on push to main)

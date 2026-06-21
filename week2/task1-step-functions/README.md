@@ -1,34 +1,89 @@
-# Task 1: Multi-step Workflows with Step Functions
+# Task 1: Multi-Step Workflow with AWS Step Functions
 
-## What was built
-- 4 Lambda functions forming an order processing pipeline
-- Step Functions state machine with parallel execution, retries, error handling
-- SNS notifications for order confirmation/failure
+## Goal
+Build an order-processing workflow using Step Functions to coordinate multiple Lambda functions, retries, failure paths, SNS notifications, and a DynamoDB write.
 
 ## Architecture
-```
-ValidateOrder -> Valid? -No-> Rejected
-                       -Yes-> CheckInventory -> InStock? -No-> Notify -> Fail
-                                                        -Yes-> Payment -> Wait -> [SaveDB || SendEmail] -> Complete
-                                                                 (error)-> Notify -> Fail
+```text
+Start
+  |
+  v
+ValidateOrder Lambda
+  |
+  v
+IsOrderValid Choice
+  |-- invalid --> OrderRejected Fail
+  |
+  v
+CheckInventory Lambda
+  |
+  v
+IsInStock Choice
+  |-- out of stock --> NotifyBackorder SNS --> BackorderFailed Fail
+  |
+  v
+ProcessPayment Lambda
+  |-- retry up to 3 times
+  |-- failure --> NotifyPaymentFailed SNS --> PaymentFailed Fail
+  |
+  v
+WaitForConfirmation
+  |
+  v
+FulfillOrder Parallel
+  |-- SaveToDB Lambda
+  |-- SendConfirmation SNS
+  |
+  v
+OrderComplete Pass
 ```
 
-## Lambda Functions
-| Function | Purpose |
-|----------|---------|
-| validate-order | Validates fields, calculates total |
-| check-inventory | Checks simulated stock levels |
-| process-payment | Simulates payment processing |
-| update-order | Saves to DynamoDB |
+## Files
+| File | Purpose |
+|---|---|
+| validate_order.py | Validates order fields and calculates total |
+| check_inventory.py | Checks simulated inventory levels |
+| process_payment.py | Simulates payment success/failure |
+| update_order.py | Saves successful order to DynamoDB |
+| state-machine.json | Amazon States Language definition |
 
-## Test Commands
+## Resources Created
+| Service | Resource |
+|---|---|
+| Lambda | validate-order |
+| Lambda | check-inventory |
+| Lambda | process-payment |
+| Lambda | update-order |
+| Step Functions | OrderProcessingWorkflow |
+| DynamoDB | order-processing |
+| SNS | order-notifications |
+
+## Step-by-Step Setup
+1. Create IAM role for Lambda execution.
+2. Create IAM role for Step Functions execution.
+3. Package and deploy four Lambda functions.
+4. Create DynamoDB table `order-processing`.
+5. Create SNS topic `order-notifications` and subscribe an email address.
+6. Update `state-machine.json` with Lambda and SNS ARNs.
+7. Create Step Functions state machine from the ASL definition.
+8. Run happy-path and failure-path executions.
+
+## How to Run / Demo
 ```bash
-# Happy path
-aws stepfunctions start-execution \
-  --state-machine-arn arn:aws:states:ap-south-1:353211646521:stateMachine:OrderProcessingWorkflow \
-  --input '{"order":{"customerId":"C001","items":[{"productId":"PROD-001","quantity":1,"price":2499}],"shippingAddress":"Bangalore"}}'
-
-# Out of stock (PROD-003)
-# Payment failure (customerId ending in "FAIL")
-# Invalid order (missing fields)
+aws stepfunctions start-execution   --state-machine-arn arn:aws:states:ap-south-1:353211646521:stateMachine:OrderProcessingWorkflow   --input '{"order":{"customerId":"C001","items":[{"productId":"PROD-001","quantity":1,"price":2499}],"shippingAddress":"Bangalore"}}'   --region ap-south-1 --no-verify-ssl
 ```
+
+### Out-of-Stock Test
+Use product `PROD-003`, which has stock `0`.
+
+### Payment Failure Test
+Use a `customerId` ending in `FAIL`, for example `C001-FAIL`.
+
+### Invalid Order Test
+Omit required fields like `customerId`, `items`, or `shippingAddress`.
+
+## What to Verify
+- Happy path reaches `SUCCEEDED`.
+- Out-of-stock path sends SNS notification and fails with inventory error.
+- Payment failure retries before failing.
+- Successful orders are saved in DynamoDB.

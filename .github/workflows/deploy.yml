@@ -1,0 +1,149 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cdk/**'
+      - 'lambda/**'
+      - 'app.py'
+      - 'requirements.txt'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cdk/**'
+      - 'lambda/**'
+      - 'app.py'
+      - 'requirements.txt'
+
+env:
+  AWS_REGION: ap-south-1
+  STACK_NAME: OrderProcessingStack
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '20'
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────
+  # Job 1: Validate & Synthesize
+  # ─────────────────────────────────────────────────────────────────────
+  validate:
+    name: Validate & Synth
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Set up Node.js (for CDK CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint Lambda code
+        run: |
+          pip install flake8
+          flake8 lambda/ --max-line-length=120 --ignore=E501,W503
+
+      - name: CDK Synth
+        run: cdk synth --quiet
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+      - name: Upload CloudFormation template
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfn-template
+          path: cdk.out/${{ env.STACK_NAME }}.template.json
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Job 2: Deploy (only on push to main)
+  # ─────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to AWS
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Download CloudFormation template
+        uses: actions/download-artifact@v4
+        with:
+          name: cfn-template
+          path: ./template
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check if stack exists
+        id: check-stack
+        run: |
+          if aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy - Create Stack
+        if: steps.check-stack.outputs.exists == 'false'
+        run: |
+          aws cloudformation create-stack \
+            --stack-name ${{ env.STACK_NAME }} \
+            --template-body file://template/${{ env.STACK_NAME }}.template.json \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }}
+
+          echo "⏳ Waiting for stack creation..."
+          aws cloudformation wait stack-create-complete \
+            --stack-name ${{ env.STACK_NAME }}
+          echo "✅ Stack created successfully"
+
+      - name: Deploy - Update Stack
+        if: steps.check-stack.outputs.exists == 'true'
+        run: |
+          set +e
+          OUTPUT=$(aws cloudformation update-stack \
+            --stack-name ${{ env.STACK_NAME }} \
+            --template-body file://template/${{ env.STACK_NAME }}.template.json \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }} 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          if echo "$OUTPUT" | grep -q "No updates are to be performed"; then
+            echo "ℹ️ No changes detected - stack is up to date"
+            exit 0
+          elif [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ Update failed: $OUTPUT"
+            exit 1
+          fi
+
+          echo "⏳ Waiting for stack update..."
+          aws cloudformation wait stack-update-complete \
+            --stack-name ${{ env.STACK_NAME }}
+          echo "✅ Stack updated successfully"
+
+      - name: Print stack outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs' \
+            --output table

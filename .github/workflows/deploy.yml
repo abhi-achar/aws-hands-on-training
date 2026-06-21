@@ -26,7 +26,6 @@ env:
   NODE_VERSION: '20'
 
 permissions:
-  id-token: write   # Required for OIDC
   contents: read
 
 jobs:
@@ -90,10 +89,12 @@ jobs:
           name: cfn-template
           path: ./template
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Check if stack exists

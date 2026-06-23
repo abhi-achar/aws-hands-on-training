@@ -20,6 +20,7 @@ Hands-on training covering core AWS services, infrastructure automation, and CI/
 | 3 | CI/CD Pipeline | GitHub Actions, CloudFormation |
 | 4 | Deployment & Rollback | CloudFormation |
 | 5 | Orchestration Integration | API Gateway, Lambda, Step Functions |
+| 6 | Weekly Deliverable | End-to-end integrated system |
 
 ## Tech Stack
 - Runtime: Python 3.12

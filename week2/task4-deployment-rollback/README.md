@@ -13,12 +13,30 @@ The test changes a low-risk property (Lambda `MemorySize`) so the deploy/rollbac
 ## Architecture
 ```mermaid
 flowchart TD
-    V1["v1 template<br/>128 MB"] -- "update-stack" --> V2["v2 template<br/>256 MB"]
-    V2 -- "UPDATE_COMPLETE" --> Deployed["Stack updated"]
-    Deployed -- "manual rollback:<br/>redeploy v1" --> V1back["v1 template<br/>128 MB"]
-    V1back -- "deploy broken v3" --> Broken["v3 template<br/>1 Lambda invalid"]
-    Broken -- "UPDATE_FAILED" --> AutoRB["Automatic rollback"]
-    AutoRB -- "UPDATE_ROLLBACK_COMPLETE" --> Restored["Stack restored to 128 MB"]
+    V1["🟢 v1 template<br/>all Lambdas 128 MB"]:::good
+    V2["🔵 v2 template<br/>all Lambdas 256 MB"]:::change
+    Deployed["✅ UPDATE_COMPLETE"]:::success
+    V1back["🟢 redeploy v1<br/>back to 128 MB"]:::good
+    Broken["🔴 v3 broken template<br/>1 Lambda = 999999 MB"]:::fail
+    Failed["⚠️ UPDATE_FAILED"]:::fail
+    AutoRB["🔁 Automatic rollback"]:::rollback
+    Restored["✅ UPDATE_ROLLBACK_COMPLETE<br/>restored to 128 MB"]:::success
+
+    subgraph ScenarioA["Scenario A · Manual rollback"]
+        V1 ==>|"update-stack"| V2 ==> Deployed
+        Deployed ==>|"redeploy previous"| V1back
+    end
+    subgraph ScenarioB["Scenario B · Automatic rollback"]
+        Broken ==>|"update-stack"| Failed
+        Failed ==> AutoRB ==> Restored
+    end
+    V1back -.->|"then test failure"| Broken
+
+    classDef good fill:#2E7D32,stroke:#1B5E20,stroke-width:2px,color:#ffffff
+    classDef change fill:#1565C0,stroke:#0D47A1,stroke-width:2px,color:#ffffff
+    classDef success fill:#43A047,stroke:#2E7D32,stroke-width:2px,color:#ffffff
+    classDef fail fill:#C62828,stroke:#8E0000,stroke-width:2px,color:#ffffff
+    classDef rollback fill:#F9A825,stroke:#F57F17,stroke-width:2px,color:#263238
 ```
 
 ## Template Versions

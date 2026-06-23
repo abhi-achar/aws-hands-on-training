@@ -6,19 +6,34 @@ Create a CI/CD pipeline that validates infrastructure code and deploys the CDK-g
 ## Architecture
 ```mermaid
 flowchart TD
-    Push["Developer push to main"] --> WF["GitHub Actions workflow"]
-    WF --> Validate["Validate job"]
-    WF --> DeployJob["Deploy job"]
-    Validate --> V1["checkout + setup Python/Node"]
-    V1 --> V2["install CDK + dependencies"]
-    V2 --> V3["flake8 lint"]
-    V3 --> V4["cdk synth"]
-    V4 --> V5["upload template artifact"]
-    DeployJob --> D1["download artifact"]
-    D1 --> D2["configure AWS credentials"]
-    D2 --> D3["check stack exists"]
-    D3 --> D4["create or update CloudFormation stack"]
-    D4 --> D5["print outputs"]
+    Push(["👩‍💻 Developer push to main"]):::client
+    subgraph GHA["🔄 GitHub Actions · Deploy Infrastructure"]
+        subgraph Validate["✅ Job 1 · Validate & Synth"]
+            V1["checkout + setup<br/>Python 3.12 / Node 20"]:::ci
+            V2["install CDK + deps"]:::ci
+            V3["🧹 flake8 lint"]:::ci
+            V4["⚙️ cdk synth"]:::ci
+            V5["⬆️ upload template artifact"]:::ci
+        end
+        subgraph Deploy["🚀 Job 2 · Deploy to AWS"]
+            D1["⬇️ download artifact"]:::deploy
+            D2["🔑 configure AWS credentials"]:::deploy
+            D3["check stack exists"]:::deploy
+            D4["create / update stack"]:::deploy
+            D5["📋 print outputs"]:::deploy
+        end
+    end
+    AWS(["☁️ CloudFormation<br/>OrderProcessingStack"]):::iac
+    Push ==> Validate
+    V1 --> V2 --> V3 --> V4 --> V5
+    Validate ==>|"on push to main"| Deploy
+    D1 --> D2 --> D3 --> D4 --> D5
+    D4 ==> AWS
+
+    classDef client fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
+    classDef ci fill:#2088FF,stroke:#1565C0,stroke-width:2px,color:#ffffff
+    classDef deploy fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
+    classDef iac fill:#8C4FFF,stroke:#6B2FD6,stroke-width:2px,color:#ffffff
 ```
 
 ## Workflow File

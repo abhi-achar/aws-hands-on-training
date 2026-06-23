@@ -6,12 +6,24 @@ Integrate private S3 storage into an application workflow using pre-signed URLs.
 ## Architecture
 ```mermaid
 flowchart TD
-    Client["Client"] --> APIGW["API Gateway"]
-    APIGW --> Lambda["Lambda:<br/>document-portal"]
-    Lambda --> DDB["DynamoDB:<br/>metadata"]
-    Lambda --> URL["Pre-signed S3 URL"]
-    URL --> Client
-    Client -- "direct HTTPS PUT" --> S3["S3 bucket:<br/>employee-docs-portal"]
+    Client(["🧑‍💻 Client"]):::client
+    subgraph AWS["☁️ AWS Cloud · ap-south-1"]
+        APIGW["🌐 API Gateway<br/>/docs routes"]:::apigw
+        Lambda["λ Lambda<br/><b>document-portal</b>"]:::lambda
+        DDB["🗄️ DynamoDB<br/><b>employee-documents</b><br/>metadata"]:::db
+        S3["🪣 S3<br/><b>employee-docs-portal</b><br/>private bucket"]:::storage
+    end
+    Client ==>|"1. POST /docs/upload"| APIGW
+    APIGW -->|"2. invoke"| Lambda
+    Lambda -->|"3. save metadata"| DDB
+    Lambda -.->|"4. return pre-signed URL"| Client
+    Client ==>|"5. direct HTTPS PUT"| S3
+
+    classDef client fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
+    classDef apigw fill:#A166FF,stroke:#7C3AED,stroke-width:2px,color:#ffffff
+    classDef lambda fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
+    classDef db fill:#4053D6,stroke:#2E3FA8,stroke-width:2px,color:#ffffff
+    classDef storage fill:#569A31,stroke:#3F7222,stroke-width:2px,color:#ffffff
 ```
 
 ## Resources Created

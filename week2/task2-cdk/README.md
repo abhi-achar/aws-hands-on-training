@@ -6,14 +6,30 @@ Recreate the Step Functions order-processing infrastructure as code using AWS CD
 ## Architecture
 ```mermaid
 flowchart TD
-    Code["CDK Python code"] --> Synth["cdk synth"]
-    Synth --> Template["CloudFormation template"]
-    Template --> Deploy["CloudFormation deploy"]
-    Deploy --> R1["DynamoDB:<br/>order-processing-cdk"]
-    Deploy --> R2["SNS:<br/>order-notifications-cdk"]
-    Deploy --> R3["4x Lambda functions"]
-    Deploy --> R4["Step Functions:<br/>OrderProcessingWorkflow-CDK"]
-    Deploy --> R5["IAM Roles"]
+    Code["🐍 CDK Python code<br/>order_processing_stack.py"]:::iac
+    Synth["⚙️ cdk synth"]:::iac
+    Template["📄 CloudFormation template<br/>OrderProcessingStack.template.json"]:::iac
+    Deploy["☁️ CloudFormation deploy"]:::iac
+    subgraph Stack["📦 OrderProcessingStack · ap-south-1"]
+        R1["🗄️ DynamoDB<br/><b>order-processing-cdk</b>"]:::db
+        R2["📢 SNS<br/><b>order-notifications-cdk</b>"]:::messaging
+        R3["λ 4x Lambda<br/>validate · inventory<br/>payment · update"]:::lambda
+        R4["🔀 Step Functions<br/><b>OrderProcessingWorkflow-CDK</b>"]:::sfn
+        R5["🔐 IAM Roles<br/>auto-generated"]:::iam
+    end
+    Code ==> Synth ==> Template ==> Deploy
+    Deploy --> R1
+    Deploy --> R2
+    Deploy --> R3
+    Deploy --> R4
+    Deploy --> R5
+
+    classDef iac fill:#8C4FFF,stroke:#6B2FD6,stroke-width:2px,color:#ffffff
+    classDef db fill:#4053D6,stroke:#2E3FA8,stroke-width:2px,color:#ffffff
+    classDef messaging fill:#E7157B,stroke:#B30E5F,stroke-width:2px,color:#ffffff
+    classDef lambda fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
+    classDef sfn fill:#CD2264,stroke:#9E1A4D,stroke-width:2px,color:#ffffff
+    classDef iam fill:#DD344C,stroke:#A82538,stroke-width:2px,color:#ffffff
 ```
 
 ## Resources Created

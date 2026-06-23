@@ -5,14 +5,27 @@ Create REST API endpoints using Amazon API Gateway and AWS Lambda. This task dem
 
 ## Architecture
 ```mermaid
-flowchart TD
-    Client["Client / Browser / curl"] --> APIGW["Amazon API Gateway<br/>SCJ-Sales-Coach-API"]
-    APIGW --> L1["Lambda: scj-health-check"]
-    APIGW --> L2["Lambda: scj-actions-for-today"]
-    APIGW --> L3["Lambda: scj-action-details"]
-    L1 --> Resp["JSON response"]
-    L2 --> Resp
-    L3 --> Resp
+flowchart LR
+    Client(["🧑‍💻 Client / curl"]):::client
+    subgraph AWS["☁️ AWS Cloud · ap-south-1"]
+        APIGW["🌐 API Gateway<br/><b>SCJ-Sales-Coach-API</b><br/>dev stage"]:::apigw
+        subgraph LG["λ Lambda · Python 3.12"]
+            L1["scj-health-check"]:::lambda
+            L2["scj-actions-for-today"]:::lambda
+            L3["scj-action-details"]:::lambda
+        end
+    end
+    Client ==>|"HTTPS GET"| APIGW
+    APIGW -->|"GET /"| L1
+    APIGW -->|"GET /api/actions-for-today"| L2
+    APIGW -->|"GET /api/action-details/{id}"| L3
+    L1 -.->|"JSON 200"| Client
+    L2 -.->|"JSON 200"| Client
+    L3 -.->|"JSON 200"| Client
+
+    classDef client fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
+    classDef apigw fill:#A166FF,stroke:#7C3AED,stroke-width:2px,color:#ffffff
+    classDef lambda fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
 ```
 
 ## Resources Created

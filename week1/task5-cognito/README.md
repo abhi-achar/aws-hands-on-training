@@ -6,12 +6,33 @@ Add operational visibility to an API using structured Lambda logs, CloudWatch me
 ## Architecture
 ```mermaid
 flowchart TD
-    Client["Client / curl"] --> APIGW["API Gateway:<br/>OrderAPI-Monitoring"]
-    APIGW --> Lambda["Lambda: order-api"]
-    Lambda --> CW["CloudWatch<br/>Logs + Metrics + Dashboard"]
-    CW --> Alarm["CloudWatch Alarm:<br/>OrderAPI-5XX-Alert"]
-    Alarm --> SNS["SNS"]
-    SNS --> Email["Email"]
+    Client(["🧑‍💻 Client / curl"]):::client
+    subgraph AWS["☁️ AWS Cloud · ap-south-1"]
+        APIGW["🌐 API Gateway<br/><b>OrderAPI-Monitoring</b>"]:::apigw
+        Lambda["λ Lambda<br/><b>order-api</b><br/>structured logging"]:::lambda
+        subgraph CWGroup["📊 CloudWatch"]
+            Logs["Logs<br/>/aws/lambda/order-api"]:::monitor
+            Metrics["Custom Metrics<br/>RequestCount · ErrorCount"]:::monitor
+            Dash["Dashboard<br/>OrderAPI-Monitoring"]:::monitor
+            Alarm["⏰ Alarm<br/>OrderAPI-5XX-Alert"]:::monitor
+        end
+        SNS["📢 SNS"]:::messaging
+    end
+    Email(["📧 Email"]):::client
+    Client ==>|"HTTPS"| APIGW
+    APIGW -->|"invoke"| Lambda
+    Lambda -->|"emit"| Logs
+    Lambda -->|"emit"| Metrics
+    Metrics --> Dash
+    Metrics -->|"5XX > 3/min"| Alarm
+    Alarm -->|"trigger"| SNS
+    SNS ==>|"notify"| Email
+
+    classDef client fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
+    classDef apigw fill:#A166FF,stroke:#7C3AED,stroke-width:2px,color:#ffffff
+    classDef lambda fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
+    classDef monitor fill:#CD2264,stroke:#9E1A4D,stroke-width:2px,color:#ffffff
+    classDef messaging fill:#E7157B,stroke:#B30E5F,stroke-width:2px,color:#ffffff
 ```
 
 ## Resources Created

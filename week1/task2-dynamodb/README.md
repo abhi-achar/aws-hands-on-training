@@ -5,13 +5,28 @@ Build an event-driven pipeline where uploading a CSV file to S3 triggers report 
 
 ## Architecture
 ```mermaid
-flowchart TD
-    Upload["CSV upload"] --> S3["S3 bucket:<br/>scj-sales-uploads"]
-    S3 --> SQS["SQS queue:<br/>sales-report-queue"]
-    SQS --> Lambda["Lambda:<br/>sales-report-generator"]
-    Lambda --> SNS["SNS topic:<br/>sales-report-notifications"]
-    SNS --> Email["Email notification"]
-    SQS -. "after 3 failed receives" .-> DLQ["SQS DLQ:<br/>sales-report-dlq"]
+flowchart LR
+    Upload(["📄 CSV upload"]):::client
+    subgraph AWS["☁️ AWS Cloud · ap-south-1"]
+        S3["🪣 S3<br/><b>scj-sales-uploads</b><br/>uploads/*.csv"]:::storage
+        SQS["📨 SQS<br/><b>sales-report-queue</b>"]:::messaging
+        DLQ["💀 SQS DLQ<br/><b>sales-report-dlq</b>"]:::fail
+        Lambda["λ Lambda<br/><b>sales-report-generator</b>"]:::lambda
+        SNS["📢 SNS<br/><b>sales-report-notifications</b>"]:::messaging
+    end
+    Email(["📧 Email inbox"]):::client
+    Upload ==>|"PUT object"| S3
+    S3 -->|"event notification"| SQS
+    SQS -->|"poll messages"| Lambda
+    Lambda -->|"publish summary"| SNS
+    SNS ==>|"deliver"| Email
+    SQS -.->|"after 3 failed receives"| DLQ
+
+    classDef client fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
+    classDef storage fill:#569A31,stroke:#3F7222,stroke-width:2px,color:#ffffff
+    classDef messaging fill:#E7157B,stroke:#B30E5F,stroke-width:2px,color:#ffffff
+    classDef lambda fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
+    classDef fail fill:#C62828,stroke:#8E0000,stroke-width:2px,color:#ffffff
 ```
 ```
 

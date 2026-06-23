@@ -6,20 +6,41 @@ Build an order-processing workflow using Step Functions to coordinate multiple L
 ## Architecture
 ```mermaid
 flowchart TD
-    Start([Start]) --> Validate["ValidateOrder Lambda"]
-    Validate --> IsValid{IsOrderValid}
-    IsValid -- invalid --> Rejected["OrderRejected (Fail)"]
-    IsValid -- valid --> CheckInv["CheckInventory Lambda"]
-    CheckInv --> InStock{IsInStock}
-    InStock -- out of stock --> Backorder["NotifyBackorder SNS"] --> BackFail["BackorderFailed (Fail)"]
-    InStock -- in stock --> Payment["ProcessPayment Lambda<br/>retry up to 3 times"]
-    Payment -- failure --> NotifyFail["NotifyPaymentFailed SNS"] --> PayFail["PaymentFailed (Fail)"]
-    Payment -- success --> Wait["WaitForConfirmation (3s)"]
-    Wait --> Parallel["FulfillOrder (Parallel)"]
-    Parallel --> SaveDB["SaveToDB Lambda"]
-    Parallel --> SendConf["SendConfirmation SNS"]
-    SaveDB --> Complete["OrderComplete (Pass)"]
+    Start(["▶️ Start"]):::start
+    Validate["λ ValidateOrder"]:::lambda
+    IsValid{"IsOrderValid?"}:::choice
+    Rejected["❌ OrderRejected<br/>ValidationError"]:::fail
+    CheckInv["λ CheckInventory"]:::lambda
+    InStock{"IsInStock?"}:::choice
+    Backorder["📢 NotifyBackorder<br/>SNS"]:::messaging
+    BackFail["❌ BackorderFailed<br/>InventoryError"]:::fail
+    Payment["λ ProcessPayment<br/>🔁 retry x3, backoff 2.0"]:::lambda
+    NotifyFail["📢 NotifyPaymentFailed<br/>SNS"]:::messaging
+    PayFail["❌ PaymentFailed<br/>PaymentError"]:::fail
+    Wait["⏳ WaitForConfirmation<br/>3 seconds"]:::wait
+    subgraph Parallel["∥ FulfillOrder (Parallel)"]
+        SaveDB["λ SaveToDB<br/>→ DynamoDB"]:::lambda
+        SendConf["📢 SendConfirmation<br/>SNS"]:::messaging
+    end
+    Complete(["✅ OrderComplete"]):::success
+
+    Start --> Validate --> IsValid
+    IsValid -->|invalid| Rejected
+    IsValid -->|valid| CheckInv --> InStock
+    InStock -->|out of stock| Backorder --> BackFail
+    InStock -->|in stock| Payment
+    Payment -->|failure| NotifyFail --> PayFail
+    Payment -->|success| Wait --> Parallel
+    SaveDB --> Complete
     SendConf --> Complete
+
+    classDef start fill:#455A64,stroke:#263238,stroke-width:2px,color:#ffffff
+    classDef lambda fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
+    classDef choice fill:#FFD54F,stroke:#F9A825,stroke-width:2px,color:#263238
+    classDef messaging fill:#E7157B,stroke:#B30E5F,stroke-width:2px,color:#ffffff
+    classDef wait fill:#90A4AE,stroke:#546E7A,stroke-width:2px,color:#263238
+    classDef fail fill:#C62828,stroke:#8E0000,stroke-width:2px,color:#ffffff
+    classDef success fill:#2E7D32,stroke:#1B5E20,stroke-width:2px,color:#ffffff
 ```
 
 ## Files

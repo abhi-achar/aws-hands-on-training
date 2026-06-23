@@ -5,11 +5,22 @@ Handle common serverless API failures gracefully with useful HTTP status codes a
 
 ## Architecture
 ```mermaid
-flowchart TD
-    Client["Client / curl"] --> APIGW["API Gateway:<br/>ProductCatalog-API"]
-    APIGW --> Lambda["Lambda:<br/>product-catalog-api"]
-    Lambda --> DDB["DynamoDB:<br/>product-catalog"]
-    Lambda -. "400 / 404 / 409 / 429 / 500 / 503" .-> Client
+flowchart LR
+    Client(["🧑‍💻 Client / curl"]):::client
+    subgraph AWS["☁️ AWS Cloud · ap-south-1"]
+        APIGW["🌐 API Gateway<br/><b>ProductCatalog-API</b>"]:::apigw
+        Lambda["λ Lambda<br/><b>product-catalog-api</b><br/>validation + retries"]:::lambda
+        DDB["🗄️ DynamoDB<br/><b>product-catalog</b>"]:::db
+    end
+    Client ==>|"HTTPS"| APIGW
+    APIGW -->|"invoke"| Lambda
+    Lambda -->|"CRUD"| DDB
+    Lambda -.->|"⚠️ 400 · 404 · 409 · 429 · 500 · 503"| Client
+
+    classDef client fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
+    classDef apigw fill:#A166FF,stroke:#7C3AED,stroke-width:2px,color:#ffffff
+    classDef lambda fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
+    classDef db fill:#4053D6,stroke:#2E3FA8,stroke-width:2px,color:#ffffff
 ```
 
 ## Resources Created

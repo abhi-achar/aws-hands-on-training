@@ -5,10 +5,23 @@ Design and test a DynamoDB single-table pattern for a food order tracking workfl
 
 ## Architecture
 ```mermaid
-flowchart TD
-    Client["Client / curl"] --> APIGW["API Gateway"]
-    APIGW --> Lambda["Lambda:<br/>food-order-tracker"]
-    Lambda --> DDB["DynamoDB table:<br/>food-orders"]
+flowchart LR
+    Client(["🧑‍💻 Client / curl"]):::client
+    subgraph AWS["☁️ AWS Cloud · ap-south-1"]
+        APIGW["🌐 API Gateway<br/>order routes"]:::apigw
+        Lambda["λ Lambda<br/><b>food-order-tracker</b>"]:::lambda
+        DDB["🗄️ DynamoDB<br/><b>food-orders</b><br/>single-table PK/SK"]:::db
+    end
+    Client ==>|"HTTPS GET"| APIGW
+    APIGW -->|"invoke"| Lambda
+    Lambda -->|"Query PK/SK"| DDB
+    DDB -.->|"items"| Lambda
+    Lambda -.->|"JSON 200"| Client
+
+    classDef client fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
+    classDef apigw fill:#A166FF,stroke:#7C3AED,stroke-width:2px,color:#ffffff
+    classDef lambda fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
+    classDef db fill:#4053D6,stroke:#2E3FA8,stroke-width:2px,color:#ffffff
 ```
 
 ## Resources Created

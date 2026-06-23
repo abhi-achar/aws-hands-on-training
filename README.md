@@ -18,6 +18,7 @@ Hands-on training covering core AWS services, infrastructure automation, and CI/
 | 1 | Multi-step Workflows | Step Functions, Lambda |
 | 2 | Infrastructure as Code | AWS CDK (Python) |
 | 3 | CI/CD Pipeline | GitHub Actions, CloudFormation |
+| 4 | Deployment & Rollback | CloudFormation |
 
 ## Tech Stack
 - Runtime: Python 3.12

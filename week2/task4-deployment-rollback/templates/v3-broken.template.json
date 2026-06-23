@@ -1,0 +1,659 @@
+{
+ "Resources": {
+  "OrderTable416EB896": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "orderId",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "KeySchema": [
+     {
+      "AttributeName": "orderId",
+      "KeyType": "HASH"
+     }
+    ],
+    "TableName": "order-processing-cdk"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/OrderTable/Resource"
+   }
+  },
+  "OrderNotifications4FA71BF4": {
+   "Type": "AWS::SNS::Topic",
+   "Properties": {
+    "DisplayName": "Order Processing Notifications",
+    "TopicName": "order-notifications-cdk"
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/OrderNotifications/Resource"
+   }
+  },
+  "OrderNotificationsabhishekafractalai8387EF8C": {
+   "Type": "AWS::SNS::Subscription",
+   "Properties": {
+    "Endpoint": "abhishek.a@fractal.ai",
+    "Protocol": "email",
+    "TopicArn": {
+     "Ref": "OrderNotifications4FA71BF4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/OrderNotifications/abhishek.a@fractal.ai/Resource"
+   }
+  },
+  "ValidateOrderServiceRoleA7D15961": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/ValidateOrder/ServiceRole/Resource"
+   }
+  },
+  "ValidateOrder63EA22A0": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "ZipFile": "\ndef lambda_handler(event, context):\n    \"\"\"Validate order has required fields and valid values.\"\"\"\n    order = event.get(\"order\", {})\n\n    errors = []\n    if not order.get(\"customerId\"):\n        errors.append(\"customerId is required\")\n    if not order.get(\"items\") or len(order.get(\"items\", [])) == 0:\n        errors.append(\"At least one item is required\")\n    if not order.get(\"shippingAddress\"):\n        errors.append(\"shippingAddress is required\")\n\n    # Validate items\n    for i, item in enumerate(order.get(\"items\", [])):\n        if not item.get(\"productId\"):\n            errors.append(f\"Item {i + 1}: productId required\")\n        if not item.get(\"quantity\") or item.get(\"quantity\", 0) <= 0:\n            errors.append(f\"Item {i + 1}: quantity must be positive\")\n        if not item.get(\"price\") or item.get(\"price\", 0) <= 0:\n            errors.append(f\"Item {i + 1}: price must be positive\")\n\n    if errors:\n        return {\n            \"valid\": False,\n            \"errors\": errors,\n            \"order\": order\n        }\n\n    # Calculate total\n    total = sum(item[\"price\"] * item[\"quantity\"] for item in order[\"items\"])\n\n    return {\n        \"valid\": True,\n        \"order\": order,\n        \"orderTotal\": total\n    }\n"
+    },
+    "FunctionName": "validate-order-cdk",
+    "Handler": "index.lambda_handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "ValidateOrderServiceRoleA7D15961",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 15
+   },
+   "DependsOn": [
+    "ValidateOrderServiceRoleA7D15961"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/ValidateOrder/Resource"
+   }
+  },
+  "CheckInventoryServiceRoleAA37D43B": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/CheckInventory/ServiceRole/Resource"
+   }
+  },
+  "CheckInventoryF4845A26": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "ZipFile": "# Simulated inventory database\nINVENTORY = {\n    \"PROD-001\": {\"name\": \"Wireless Headphones\", \"stock\": 50},\n    \"PROD-002\": {\"name\": \"Phone Case\", \"stock\": 200},\n    \"PROD-003\": {\"name\": \"USB-C Cable\", \"stock\": 0},  # Out of stock!\n    \"PROD-004\": {\"name\": \"Laptop Stand\", \"stock\": 15},\n}\n\n\ndef lambda_handler(event, context):\n    \"\"\"Check if all items are in stock.\"\"\"\n    order = event.get(\"order\", {})\n    items = order.get(\"items\", [])\n\n    out_of_stock = []\n    inventory_result = []\n\n    for item in items:\n        product_id = item[\"productId\"]\n        requested_qty = item[\"quantity\"]\n        product = INVENTORY.get(product_id)\n\n        if not product:\n            out_of_stock.append({\n                \"productId\": product_id,\n                \"reason\": \"Product not found\"\n            })\n        elif product[\"stock\"] < requested_qty:\n            out_of_stock.append({\n                \"productId\": product_id,\n                \"name\": product[\"name\"],\n                \"available\": product[\"stock\"],\n                \"requested\": requested_qty\n            })\n        else:\n            inventory_result.append({\n                \"productId\": product_id,\n                \"name\": product[\"name\"],\n                \"reserved\": requested_qty\n            })\n\n    return {\n        \"inStock\": len(out_of_stock) == 0,\n        \"outOfStock\": out_of_stock,\n        \"reserved\": inventory_result,\n        \"order\": order,\n        \"orderTotal\": event.get(\"orderTotal\", 0)\n    }\n"
+    },
+    "FunctionName": "check-inventory-cdk",
+    "Handler": "index.lambda_handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "CheckInventoryServiceRoleAA37D43B",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 15
+   },
+   "DependsOn": [
+    "CheckInventoryServiceRoleAA37D43B"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/CheckInventory/Resource"
+   }
+  },
+  "ProcessPaymentServiceRoleF55903C3": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/ProcessPayment/ServiceRole/Resource"
+   }
+  },
+  "ProcessPaymentD2586985": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "ZipFile": "import uuid\nimport random\n\n\ndef lambda_handler(event, context):\n    \"\"\"Simulate payment processing. Fails for customerIds ending in FAIL.\"\"\"\n    order = event.get(\"order\", {})\n    order_total = event.get(\"orderTotal\", 0)\n\n    # Force failure for demo: customerId ending in \"FAIL\"\n    if order.get(\"customerId\", \"\").endswith(\"FAIL\"):\n        raise Exception(\"Payment gateway timeout - please retry\")\n\n    # Random failure ~10% of the time\n    if random.random() < 0.1:\n        raise Exception(\"Payment service temporarily unavailable\")\n\n    payment_id = f\"PAY-{uuid.uuid4().hex[:8].upper()}\"\n\n    return {\n        \"paymentSuccess\": True,\n        \"paymentId\": payment_id,\n        \"amountCharged\": order_total,\n        \"currency\": \"INR\",\n        \"order\": order,\n        \"orderTotal\": order_total\n    }\n"
+    },
+    "FunctionName": "process-payment-cdk",
+    "Handler": "index.lambda_handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "ProcessPaymentServiceRoleF55903C3",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 15
+   },
+   "DependsOn": [
+    "ProcessPaymentServiceRoleF55903C3"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/ProcessPayment/Resource"
+   }
+  },
+  "UpdateOrderServiceRoleEC180426": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/UpdateOrder/ServiceRole/Resource"
+   }
+  },
+  "UpdateOrderServiceRoleDefaultPolicy636A5455": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "OrderTable416EB896",
+          "Arn"
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "OrderTable416EB896",
+          "Arn"
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "UpdateOrderServiceRoleDefaultPolicy636A5455",
+    "Roles": [
+     {
+      "Ref": "UpdateOrderServiceRoleEC180426"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/UpdateOrder/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "UpdateOrder97797B6B": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "ZipFile": "import os\nimport uuid\nimport boto3\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource(\"dynamodb\")\ntable = dynamodb.Table(os.environ[\"TABLE_NAME\"])\n\n\ndef lambda_handler(event, context):\n    \"\"\"Save final order to DynamoDB.\"\"\"\n    order = event.get(\"order\", {})\n    order_id = f\"ORD-{uuid.uuid4().hex[:8].upper()}\"\n\n    item = {\n        \"orderId\": order_id,\n        \"customerId\": order[\"customerId\"],\n        \"items\": order[\"items\"],\n        \"shippingAddress\": order[\"shippingAddress\"],\n        \"orderTotal\": Decimal(str(event.get(\"orderTotal\", 0))),\n        \"paymentId\": event.get(\"paymentId\", \"N/A\"),\n        \"status\": \"CONFIRMED\",\n        \"createdAt\": datetime.utcnow().isoformat(),\n    }\n\n    table.put_item(Item=item)\n\n    return {\n        \"orderId\": order_id,\n        \"status\": \"CONFIRMED\",\n        \"customerId\": order[\"customerId\"],\n        \"orderTotal\": event.get(\"orderTotal\", 0),\n        \"paymentId\": event.get(\"paymentId\", \"N/A\"),\n    }\n"
+    },
+    "Environment": {
+     "Variables": {
+      "TABLE_NAME": {
+       "Ref": "OrderTable416EB896"
+      }
+     }
+    },
+    "FunctionName": "update-order-cdk",
+    "Handler": "index.lambda_handler",
+    "MemorySize": 999999,
+    "Role": {
+     "Fn::GetAtt": [
+      "UpdateOrderServiceRoleEC180426",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 15
+   },
+   "DependsOn": [
+    "UpdateOrderServiceRoleDefaultPolicy636A5455",
+    "UpdateOrderServiceRoleEC180426"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/UpdateOrder/Resource"
+   }
+  },
+  "OrderProcessingStateMachineRole4E5EB240": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "states.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/OrderProcessingStateMachine/Role/Resource"
+   }
+  },
+  "OrderProcessingStateMachineRoleDefaultPolicyECD569AF": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ValidateOrder63EA22A0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ValidateOrder63EA22A0",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "CheckInventoryF4845A26",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "CheckInventoryF4845A26",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ProcessPaymentD2586985",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ProcessPaymentD2586985",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "UpdateOrder97797B6B",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "UpdateOrder97797B6B",
+             "Arn"
+            ]
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "sns:Publish",
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "OrderNotifications4FA71BF4"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "OrderProcessingStateMachineRoleDefaultPolicyECD569AF",
+    "Roles": [
+     {
+      "Ref": "OrderProcessingStateMachineRole4E5EB240"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/OrderProcessingStateMachine/Role/DefaultPolicy/Resource"
+   }
+  },
+  "OrderProcessingStateMachineD268D63F": {
+   "Type": "AWS::StepFunctions::StateMachine",
+   "Properties": {
+    "DefinitionString": {
+     "Fn::Join": [
+      "",
+      [
+       "{\"StartAt\":\"ValidateOrderTask\",\"States\":{\"ValidateOrderTask\":{\"Next\":\"IsOrderValid\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"OutputPath\":\"$.Payload\",\"Resource\":\"arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"",
+       {
+        "Fn::GetAtt": [
+         "ValidateOrder63EA22A0",
+         "Arn"
+        ]
+       },
+       "\",\"Payload.$\":\"$\"}},\"IsOrderValid\":{\"Type\":\"Choice\",\"Choices\":[{\"Variable\":\"$.valid\",\"BooleanEquals\":false,\"Next\":\"OrderRejected\"}],\"Default\":\"CheckInventoryTask\"},\"CheckInventoryTask\":{\"Next\":\"IsInStock\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"OutputPath\":\"$.Payload\",\"Resource\":\"arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"",
+       {
+        "Fn::GetAtt": [
+         "CheckInventoryF4845A26",
+         "Arn"
+        ]
+       },
+       "\",\"Payload.$\":\"$\"}},\"IsInStock\":{\"Type\":\"Choice\",\"Choices\":[{\"Variable\":\"$.inStock\",\"BooleanEquals\":false,\"Next\":\"NotifyBackorder\"}],\"Default\":\"ProcessPaymentTask\"},\"ProcessPaymentTask\":{\"Next\":\"WaitForConfirmation\",\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2},{\"ErrorEquals\":[\"States.ALL\"],\"IntervalSeconds\":2,\"MaxAttempts\":3,\"BackoffRate\":2}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"ResultPath\":\"$.paymentError\",\"Next\":\"NotifyPaymentFailed\"}],\"Type\":\"Task\",\"OutputPath\":\"$.Payload\",\"Resource\":\"arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"",
+       {
+        "Fn::GetAtt": [
+         "ProcessPaymentD2586985",
+         "Arn"
+        ]
+       },
+       "\",\"Payload.$\":\"$\"}},\"WaitForConfirmation\":{\"Type\":\"Wait\",\"Seconds\":3,\"Next\":\"FulfillOrder\"},\"FulfillOrder\":{\"Type\":\"Parallel\",\"Next\":\"OrderComplete\",\"Branches\":[{\"StartAt\":\"SaveToDBTask\",\"States\":{\"SaveToDBTask\":{\"End\":true,\"Retry\":[{\"ErrorEquals\":[\"Lambda.ClientExecutionTimeoutException\",\"Lambda.ServiceException\",\"Lambda.AWSLambdaException\",\"Lambda.SdkClientException\"],\"IntervalSeconds\":2,\"MaxAttempts\":6,\"BackoffRate\":2}],\"Type\":\"Task\",\"OutputPath\":\"$.Payload\",\"Resource\":\"arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":states:::lambda:invoke\",\"Parameters\":{\"FunctionName\":\"",
+       {
+        "Fn::GetAtt": [
+         "UpdateOrder97797B6B",
+         "Arn"
+        ]
+       },
+       "\",\"Payload.$\":\"$\"}}}},{\"StartAt\":\"SendConfirmation\",\"States\":{\"SendConfirmation\":{\"End\":true,\"Type\":\"Task\",\"Resource\":\"arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":states:::sns:publish\",\"Parameters\":{\"TopicArn\":\"",
+       {
+        "Ref": "OrderNotifications4FA71BF4"
+       },
+       "\",\"Message.$\":\"States.Format('Your order is confirmed! Total: INR {}. Shipping to: {}', States.JsonToString($.orderTotal), $.order.shippingAddress)\",\"Subject\":\"Order Confirmed!\"}}}}]},\"OrderComplete\":{\"Type\":\"Pass\",\"Parameters\":{\"finalStatus\":\"Order processing completed successfully\",\"orderResult.$\":\"$[0]\",\"notificationResult.$\":\"$[1]\"},\"End\":true},\"NotifyPaymentFailed\":{\"Next\":\"PaymentFailedState\",\"Type\":\"Task\",\"Resource\":\"arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":states:::sns:publish\",\"Parameters\":{\"TopicArn\":\"",
+       {
+        "Ref": "OrderNotifications4FA71BF4"
+       },
+       "\",\"Message.$\":\"States.Format('Payment failed for customer: {}. Error: {}', $.order.customerId, $.paymentError.Cause)\",\"Subject\":\"Payment Failed - Order Cancelled\"}},\"PaymentFailedState\":{\"Type\":\"Fail\",\"Error\":\"PaymentError\",\"Cause\":\"Payment processing failed after 3 retries\"},\"NotifyBackorder\":{\"Next\":\"BackorderFailed\",\"Type\":\"Task\",\"Resource\":\"arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":states:::sns:publish\",\"Parameters\":{\"TopicArn\":\"",
+       {
+        "Ref": "OrderNotifications4FA71BF4"
+       },
+       "\",\"Message.$\":\"States.Format('Items out of stock: {}. Customer: {}', States.JsonToString($.outOfStock), $.order.customerId)\",\"Subject\":\"Order Backordered - Items Out of Stock\"}},\"BackorderFailed\":{\"Type\":\"Fail\",\"Error\":\"InventoryError\",\"Cause\":\"Items out of stock\"},\"OrderRejected\":{\"Type\":\"Fail\",\"Error\":\"ValidationError\",\"Cause\":\"Order validation failed\"}},\"TimeoutSeconds\":300}"
+      ]
+     ]
+    },
+    "RoleArn": {
+     "Fn::GetAtt": [
+      "OrderProcessingStateMachineRole4E5EB240",
+      "Arn"
+     ]
+    },
+    "StateMachineName": "OrderProcessingWorkflow-CDK"
+   },
+   "DependsOn": [
+    "OrderProcessingStateMachineRoleDefaultPolicyECD569AF",
+    "OrderProcessingStateMachineRole4E5EB240"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/OrderProcessingStateMachine/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/12O3WrDMAyFn6X3ita1sD1AoTDYWEgKuyyy4xItjh0ieyUYv/uos0LZlb5zdPSzw93LFrcbukqlu6GyrDC1gfQAdJVz6hZHo+8UphMpa+BwcQUyiBNMJz+xLmaBNirRM0+Bvbu5jzqDpVF1hOkYnb4n7pyBacTU+PVGqbW3rJebXCmDBDNd/ibkHEgGwfRe1r65Hz8YaJ3UUVmW/l8a05HYwhdxgJpmstZYqEkEDr1nbaANFMwH6Z5deeFR5wyNER9nXVqfMUwxZKiX0Hv3tMfnPb5uvoW5mqMLPBps1voL17uptF8BAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "OrderProcessingStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "StateMachineArn": {
+   "Value": {
+    "Ref": "OrderProcessingStateMachineD268D63F"
+   }
+  },
+  "TableName": {
+   "Value": {
+    "Ref": "OrderTable416EB896"
+   }
+  },
+  "TopicArn": {
+   "Value": {
+    "Ref": "OrderNotifications4FA71BF4"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

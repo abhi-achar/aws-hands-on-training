@@ -17,6 +17,9 @@ node_modules/
 # Logs
 *.log
 
+# RAG generated vector store (regenerate with: python rag_assistant.py ingest)
+vector_store.json
+
 # OS
 .DS_Store
 Thumbs.db

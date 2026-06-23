@@ -22,6 +22,11 @@ Hands-on training covering core AWS services, infrastructure automation, and CI/
 | 5 | Orchestration Integration | API Gateway, Lambda, Step Functions |
 | 6 | Weekly Deliverable | End-to-end integrated system |
 
+## Week 3: AI & GenAI
+| Task | Topic | Key Services |
+|------|-------|--------------|
+| 1 | RAG-Based Assistant | Amazon Bedrock (Titan Embeddings, Claude 3 Haiku) |
+
 ## Tech Stack
 - Runtime: Python 3.12
 - IaC: AWS CDK v2 (Python)

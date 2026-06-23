@@ -10,6 +10,17 @@ Every CloudFormation `update-stack` is transactional:
 
 The test changes a low-risk property (Lambda `MemorySize`) so the deploy/rollback effect is easy to observe.
 
+## Architecture
+```mermaid
+flowchart TD
+    V1["v1 template<br/>128 MB"] -- "update-stack" --> V2["v2 template<br/>256 MB"]
+    V2 -- "UPDATE_COMPLETE" --> Deployed["Stack updated"]
+    Deployed -- "manual rollback:<br/>redeploy v1" --> V1back["v1 template<br/>128 MB"]
+    V1back -- "deploy broken v3" --> Broken["v3 template<br/>1 Lambda invalid"]
+    Broken -- "UPDATE_FAILED" --> AutoRB["Automatic rollback"]
+    AutoRB -- "UPDATE_ROLLBACK_COMPLETE" --> Restored["Stack restored to 128 MB"]
+```
+
 ## Template Versions
 | Template | Description |
 |---|---|

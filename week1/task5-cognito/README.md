@@ -4,20 +4,14 @@
 Add operational visibility to an API using structured Lambda logs, CloudWatch metrics, dashboard widgets, and alarms.
 
 ## Architecture
-```text
-Client / curl
-    |
-    v
-API Gateway: OrderAPI-Monitoring
-    |
-    v
-Lambda: order-api
-    |
-    v
-CloudWatch Logs + Metrics + Dashboard
-    |
-    v
-CloudWatch Alarm: OrderAPI-5XX-Alert -> SNS -> Email
+```mermaid
+flowchart TD
+    Client["Client / curl"] --> APIGW["API Gateway:<br/>OrderAPI-Monitoring"]
+    APIGW --> Lambda["Lambda: order-api"]
+    Lambda --> CW["CloudWatch<br/>Logs + Metrics + Dashboard"]
+    CW --> Alarm["CloudWatch Alarm:<br/>OrderAPI-5XX-Alert"]
+    Alarm --> SNS["SNS"]
+    SNS --> Email["Email"]
 ```
 
 ## Resources Created

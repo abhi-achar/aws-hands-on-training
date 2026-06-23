@@ -4,17 +4,15 @@
 Create REST API endpoints using Amazon API Gateway and AWS Lambda. This task demonstrates how a client request reaches API Gateway, invokes Lambda, and receives a JSON response.
 
 ## Architecture
-```text
-Client / Browser / curl
-        |
-        v
-Amazon API Gateway - REST API
-        |
-        v
-AWS Lambda functions
-        |
-        v
-JSON response
+```mermaid
+flowchart TD
+    Client["Client / Browser / curl"] --> APIGW["Amazon API Gateway<br/>SCJ-Sales-Coach-API"]
+    APIGW --> L1["Lambda: scj-health-check"]
+    APIGW --> L2["Lambda: scj-actions-for-today"]
+    APIGW --> L3["Lambda: scj-action-details"]
+    L1 --> Resp["JSON response"]
+    L2 --> Resp
+    L3 --> Resp
 ```
 
 ## Resources Created

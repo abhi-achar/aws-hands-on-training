@@ -4,28 +4,21 @@
 Create a CI/CD pipeline that validates infrastructure code and deploys the CDK-generated CloudFormation template to AWS.
 
 ## Architecture
-```text
-Developer push to main
-       |
-       v
-GitHub Actions workflow
-       |
-       +--> Validate job
-       |      - checkout
-       |      - setup Python
-       |      - setup Node.js
-       |      - install CDK
-       |      - install dependencies
-       |      - flake8 lint
-       |      - cdk synth
-       |      - upload template artifact
-       |
-       +--> Deploy job
-              - download artifact
-              - configure AWS credentials
-              - check stack exists
-              - create or update CloudFormation stack
-              - print outputs
+```mermaid
+flowchart TD
+    Push["Developer push to main"] --> WF["GitHub Actions workflow"]
+    WF --> Validate["Validate job"]
+    WF --> DeployJob["Deploy job"]
+    Validate --> V1["checkout + setup Python/Node"]
+    V1 --> V2["install CDK + dependencies"]
+    V2 --> V3["flake8 lint"]
+    V3 --> V4["cdk synth"]
+    V4 --> V5["upload template artifact"]
+    DeployJob --> D1["download artifact"]
+    D1 --> D2["configure AWS credentials"]
+    D2 --> D3["check stack exists"]
+    D3 --> D4["create or update CloudFormation stack"]
+    D4 --> D5["print outputs"]
 ```
 
 ## Workflow File

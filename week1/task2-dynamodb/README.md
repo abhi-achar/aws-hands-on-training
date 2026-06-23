@@ -4,25 +4,15 @@
 Build an event-driven pipeline where uploading a CSV file to S3 triggers report generation through SQS and Lambda, then sends a notification through SNS.
 
 ## Architecture
-```text
-CSV upload
-   |
-   v
-S3 bucket: scj-sales-uploads
-   |
-   v
-SQS queue: sales-report-queue
-   |
-   v
-Lambda: sales-report-generator
-   |
-   v
-SNS topic: sales-report-notifications
-   |
-   v
-Email notification
-
-Failure path: sales-report-queue -> sales-report-dlq after 3 failed receives
+```mermaid
+flowchart TD
+    Upload["CSV upload"] --> S3["S3 bucket:<br/>scj-sales-uploads"]
+    S3 --> SQS["SQS queue:<br/>sales-report-queue"]
+    SQS --> Lambda["Lambda:<br/>sales-report-generator"]
+    Lambda --> SNS["SNS topic:<br/>sales-report-notifications"]
+    SNS --> Email["Email notification"]
+    SQS -. "after 3 failed receives" .-> DLQ["SQS DLQ:<br/>sales-report-dlq"]
+```
 ```
 
 ## Resources Created

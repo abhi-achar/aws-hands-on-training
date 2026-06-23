@@ -4,17 +4,11 @@
 Design and test a DynamoDB single-table pattern for a food order tracking workflow. This task focuses on access-pattern-first design.
 
 ## Architecture
-```text
-Client / curl
-    |
-    v
-API Gateway
-    |
-    v
-Lambda: food-order-tracker
-    |
-    v
-DynamoDB table: food-orders
+```mermaid
+flowchart TD
+    Client["Client / curl"] --> APIGW["API Gateway"]
+    APIGW --> Lambda["Lambda:<br/>food-order-tracker"]
+    Lambda --> DDB["DynamoDB table:<br/>food-orders"]
 ```
 
 ## Resources Created

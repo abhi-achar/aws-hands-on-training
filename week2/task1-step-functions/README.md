@@ -4,38 +4,22 @@
 Build an order-processing workflow using Step Functions to coordinate multiple Lambda functions, retries, failure paths, SNS notifications, and a DynamoDB write.
 
 ## Architecture
-```text
-Start
-  |
-  v
-ValidateOrder Lambda
-  |
-  v
-IsOrderValid Choice
-  |-- invalid --> OrderRejected Fail
-  |
-  v
-CheckInventory Lambda
-  |
-  v
-IsInStock Choice
-  |-- out of stock --> NotifyBackorder SNS --> BackorderFailed Fail
-  |
-  v
-ProcessPayment Lambda
-  |-- retry up to 3 times
-  |-- failure --> NotifyPaymentFailed SNS --> PaymentFailed Fail
-  |
-  v
-WaitForConfirmation
-  |
-  v
-FulfillOrder Parallel
-  |-- SaveToDB Lambda
-  |-- SendConfirmation SNS
-  |
-  v
-OrderComplete Pass
+```mermaid
+flowchart TD
+    Start([Start]) --> Validate["ValidateOrder Lambda"]
+    Validate --> IsValid{IsOrderValid}
+    IsValid -- invalid --> Rejected["OrderRejected (Fail)"]
+    IsValid -- valid --> CheckInv["CheckInventory Lambda"]
+    CheckInv --> InStock{IsInStock}
+    InStock -- out of stock --> Backorder["NotifyBackorder SNS"] --> BackFail["BackorderFailed (Fail)"]
+    InStock -- in stock --> Payment["ProcessPayment Lambda<br/>retry up to 3 times"]
+    Payment -- failure --> NotifyFail["NotifyPaymentFailed SNS"] --> PayFail["PaymentFailed (Fail)"]
+    Payment -- success --> Wait["WaitForConfirmation (3s)"]
+    Wait --> Parallel["FulfillOrder (Parallel)"]
+    Parallel --> SaveDB["SaveToDB Lambda"]
+    Parallel --> SendConf["SendConfirmation SNS"]
+    SaveDB --> Complete["OrderComplete (Pass)"]
+    SendConf --> Complete
 ```
 
 ## Files

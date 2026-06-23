@@ -4,17 +4,12 @@
 Handle common serverless API failures gracefully with useful HTTP status codes and consistent JSON error responses.
 
 ## Architecture
-```text
-Client / curl
-    |
-    v
-API Gateway: ProductCatalog-API
-    |
-    v
-Lambda: product-catalog-api
-    |
-    v
-DynamoDB: product-catalog
+```mermaid
+flowchart TD
+    Client["Client / curl"] --> APIGW["API Gateway:<br/>ProductCatalog-API"]
+    APIGW --> Lambda["Lambda:<br/>product-catalog-api"]
+    Lambda --> DDB["DynamoDB:<br/>product-catalog"]
+    Lambda -. "400 / 404 / 409 / 429 / 500 / 503" .-> Client
 ```
 
 ## Resources Created

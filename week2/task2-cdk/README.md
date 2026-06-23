@@ -4,18 +4,16 @@
 Recreate the Step Functions order-processing infrastructure as code using AWS CDK in Python, then deploy it through CloudFormation.
 
 ## Architecture
-```text
-CDK Python code
-   |
-   v
-cdk synth
-   |
-   v
-CloudFormation template
-   |
-   v
-AWS resources:
-DynamoDB + SNS + Lambda x4 + Step Functions + IAM
+```mermaid
+flowchart TD
+    Code["CDK Python code"] --> Synth["cdk synth"]
+    Synth --> Template["CloudFormation template"]
+    Template --> Deploy["CloudFormation deploy"]
+    Deploy --> R1["DynamoDB:<br/>order-processing-cdk"]
+    Deploy --> R2["SNS:<br/>order-notifications-cdk"]
+    Deploy --> R3["4x Lambda functions"]
+    Deploy --> R4["Step Functions:<br/>OrderProcessingWorkflow-CDK"]
+    Deploy --> R5["IAM Roles"]
 ```
 
 ## Resources Created

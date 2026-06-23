@@ -4,15 +4,14 @@
 Integrate private S3 storage into an application workflow using pre-signed URLs. Users upload/download directly from S3 while metadata is tracked in DynamoDB.
 
 ## Architecture
-```text
-Upload request
-Client -> API Gateway -> Lambda: document-portal -> DynamoDB metadata
-                                      |
-                                      v
-                              Pre-signed S3 URL
-                                      |
-                                      v
-Client uploads directly to S3 bucket: employee-docs-portal
+```mermaid
+flowchart TD
+    Client["Client"] --> APIGW["API Gateway"]
+    APIGW --> Lambda["Lambda:<br/>document-portal"]
+    Lambda --> DDB["DynamoDB:<br/>metadata"]
+    Lambda --> URL["Pre-signed S3 URL"]
+    URL --> Client
+    Client -- "direct HTTPS PUT" --> S3["S3 bucket:<br/>employee-docs-portal"]
 ```
 
 ## Resources Created

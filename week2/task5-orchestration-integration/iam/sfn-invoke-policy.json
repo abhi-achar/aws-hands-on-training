@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "states:StartExecution",
+        "states:DescribeExecution"
+      ],
+      "Resource": [
+        "arn:aws:states:ap-south-1:353211646521:stateMachine:OrderProcessingWorkflow-CDK",
+        "arn:aws:states:ap-south-1:353211646521:execution:OrderProcessingWorkflow-CDK:*"
+      ]
+    }
+  ]
+}

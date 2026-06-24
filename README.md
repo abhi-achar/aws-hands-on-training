@@ -27,6 +27,7 @@ Hands-on training covering core AWS services, infrastructure automation, and CI/
 |------|-------|--------------|
 | 1 | RAG-Based Assistant | Amazon Bedrock (Titan Embeddings, Claude 3 Haiku) |
 | 2 | Document Ingestion & Retrieval | S3, Lambda, DynamoDB, API Gateway, Bedrock |
+| 3 | Tool-Calling Agent | Strands Agents SDK, Bedrock (Claude 3 Haiku) |
 
 ## Tech Stack
 - Runtime: Python 3.12

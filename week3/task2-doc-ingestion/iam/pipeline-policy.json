@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadDocuments",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::novacart-kb-documents-353211646521/*"
+    },
+    {
+      "Sid": "VectorTableAccess",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:Scan",
+        "dynamodb:Query",
+        "dynamodb:DeleteItem"
+      ],
+      "Resource": "arn:aws:dynamodb:ap-south-1:353211646521:table/novacart-kb-vectors"
+    },
+    {
+      "Sid": "InvokeBedrock",
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel"],
+      "Resource": "arn:aws:bedrock:ap-south-1::foundation-model/amazon.titan-embed-text-v2:0"
+    }
+  ]
+}

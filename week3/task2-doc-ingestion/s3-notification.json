@@ -1,0 +1,16 @@
+{
+  "LambdaFunctionConfigurations": [
+    {
+      "Id": "ingest-on-upload",
+      "LambdaFunctionArn": "arn:aws:lambda:ap-south-1:353211646521:function:novacart-kb-ingest",
+      "Events": ["s3:ObjectCreated:*"],
+      "Filter": {
+        "Key": {
+          "FilterRules": [
+            {"Name": "prefix", "Value": "documents/"}
+          ]
+        }
+      }
+    }
+  ]
+}

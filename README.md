@@ -6,11 +6,11 @@ Hands-on training covering core AWS services, infrastructure automation, and CI/
 | Task | Topic | Key Services |
 |------|-------|--------------|
 | 1 | REST API with Lambda | API Gateway, Lambda |
-| 2 | NoSQL Database CRUD | DynamoDB |
-| 3 | Static Website Hosting | S3 |
-| 4 | CDN & Custom Domain | CloudFront |
-| 5 | Authentication | Cognito |
-| 6 | Full-stack Integration | All above |
+| 2 | Event-Driven Flows | S3, SQS, Lambda, SNS |
+| 3 | DynamoDB Table Design | DynamoDB, Lambda, API Gateway |
+| 4 | S3 Pre-Signed URLs | S3, DynamoDB, Lambda, API Gateway |
+| 5 | Monitoring & Alerting | CloudWatch, Lambda, API Gateway, SNS |
+| 6 | Error Handling | API Gateway, Lambda, DynamoDB |
 
 ## Week 2: Automation & DevOps
 | Task | Topic | Key Services |

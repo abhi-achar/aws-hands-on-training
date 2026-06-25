@@ -1,0 +1,142 @@
+[
+  {
+    "use_case": "Customer Support Q&A",
+    "model": "Claude 3 Haiku",
+    "latency_s": 0.89,
+    "input_tokens": 52,
+    "output_tokens": 69,
+    "estimated_cost_usd": 9.9e-05,
+    "output": "I apologize for the delay in your order. Our team is working diligently to process and ship your order as soon as possible. Please allow 3-5 business days for your order to be processed and shipped. If you have any other questions, please don't hesitate to reach out to our support team."
+  },
+  {
+    "use_case": "Customer Support Q&A",
+    "model": "Claude 3 Sonnet",
+    "latency_s": 0.93,
+    "input_tokens": 52,
+    "output_tokens": 40,
+    "estimated_cost_usd": 0.000756,
+    "output": "Orders typically ship within 1-2 business days after being placed. If your order status hasn't updated after 3 business days, please contact our support team for assistance."
+  },
+  {
+    "use_case": "Customer Support Q&A",
+    "model": "Llama 3 8B",
+    "latency_s": 0.52,
+    "input_tokens": 49,
+    "output_tokens": 50,
+    "estimated_cost_usd": 4.5e-05,
+    "output": "I apologize for the inconvenience. I've checked on your order and it's currently being processed, but I've escalated it to our fulfillment team to expedite shipping. You should receive an email with a shipping confirmation within the next 24 hours."
+  },
+  {
+    "use_case": "Summarization",
+    "model": "Claude 3 Haiku",
+    "latency_s": 0.96,
+    "input_tokens": 133,
+    "output_tokens": 100,
+    "estimated_cost_usd": 0.000158,
+    "output": "Here's a summary of the customer complaint in 2 bullet points:\n\n- The customer placed order ORD-5521 on June 15 for a laptop stand and wireless mouse, but only received the mouse, with the laptop stand still \"In Transit\" for 4 days with no updates.\n- The customer is frustrated as they need the laptop stand for their home office setup and wants either immediate delivery or a full refund for the missing item."
+  },
+  {
+    "use_case": "Summarization",
+    "model": "Claude 3 Sonnet",
+    "latency_s": 1.94,
+    "input_tokens": 133,
+    "output_tokens": 107,
+    "estimated_cost_usd": 0.002004,
+    "output": "\u2022 Order ORD-5521, placed on June 15, included a laptop stand and wireless mouse. The mouse was received, but the laptop stand has been stuck in transit for 4 days with no updates, despite the expected delivery date of June 18.\n\n\u2022 The customer has called support twice and was told to wait, but they find this unacceptable as they need the stand for their home office setup. They demand either immediate delivery of the missing item or a full refund."
+  },
+  {
+    "use_case": "Summarization",
+    "model": "Llama 3 8B",
+    "latency_s": 0.86,
+    "input_tokens": 123,
+    "output_tokens": 91,
+    "estimated_cost_usd": 9.1e-05,
+    "output": "Here is a summary of the customer complaint in 2 bullet points:\n\n\u2022 The customer placed an order on June 15 for a laptop stand and wireless mouse, but only received the mouse by June 22, with the laptop stand still showing as \"In Transit\" with no updates.\n\u2022 The customer is frustrated and wants either immediate delivery of the laptop stand or a full refund for the missing item, as they need it for their home office setup."
+  },
+  {
+    "use_case": "Structured Extraction",
+    "model": "Claude 3 Haiku",
+    "latency_s": 0.71,
+    "input_tokens": 122,
+    "output_tokens": 83,
+    "estimated_cost_usd": 0.000134,
+    "output": "{\n  \"order_id\": \"ORD-8834\",\n  \"customer_name\": \"Priya Sharma\",\n  \"issue_type\": \"Damaged Bluetooth speaker\",\n  \"items_mentioned\": [\n    \"Bluetooth speaker\",\n    \"Headphones\"\n  ],\n  \"urgency\": \"high\"\n}"
+  },
+  {
+    "use_case": "Structured Extraction",
+    "model": "Claude 3 Sonnet",
+    "latency_s": 0.98,
+    "input_tokens": 122,
+    "output_tokens": 79,
+    "estimated_cost_usd": 0.001551,
+    "output": "{\n  \"order_id\": \"ORD-8834\",\n  \"customer_name\": \"Priya Sharma\",\n  \"issue_type\": \"damaged item\",\n  \"items_mentioned\": [\n    \"Bluetooth speaker\",\n    \"headphones\"\n  ],\n  \"urgency\": \"high\"\n}"
+  },
+  {
+    "use_case": "Structured Extraction",
+    "model": "Llama 3 8B",
+    "latency_s": 1.04,
+    "input_tokens": 106,
+    "output_tokens": 115,
+    "estimated_cost_usd": 0.000101,
+    "output": "Here is the extracted order information in JSON format:\n\n```\n{\n  \"order_id\": \"ORD-8834\",\n  \"customer_name\": \"Priya Sharma\",\n  \"issue_type\": \"damaged product\",\n  \"items_mentioned\": [\"Bluetooth speaker\", \"headphones\"],\n  \"urgency\": \"high\"\n}\n```\n\nNote: I assumed the issue type to be \"damaged product\" based on the email content, and the urgency to be \"high\" since the customer mentioned it's a birthday gift for tomorrow and needs a replacement urgently."
+  },
+  {
+    "use_case": "Marketing Copy",
+    "model": "Claude 3 Haiku",
+    "latency_s": 0.48,
+    "input_tokens": 43,
+    "output_tokens": 32,
+    "estimated_cost_usd": 5.1e-05,
+    "output": "Hurry! 40% off all electronics at NovaCart. Today only with free express shipping. Don't miss this flash sale!"
+  },
+  {
+    "use_case": "Marketing Copy",
+    "model": "Claude 3 Sonnet",
+    "latency_s": 0.83,
+    "input_tokens": 43,
+    "output_tokens": 34,
+    "estimated_cost_usd": 0.000639,
+    "output": "Flash Sale Alert! \ud83d\udd25 40% off all electronics + free express shipping at NovaCart. Today only, don't miss out!"
+  },
+  {
+    "use_case": "Marketing Copy",
+    "model": "Claude 3 Sonnet",
+    "error": "'charmap' codec can't encode character '\\U0001f525' in position 28: character maps to <undefined>"
+  },
+  {
+    "use_case": "Marketing Copy",
+    "model": "Llama 3 8B",
+    "latency_s": 0.32,
+    "input_tokens": 44,
+    "output_tokens": 25,
+    "estimated_cost_usd": 2.8e-05,
+    "output": "\"FLASH SALE ALERT! Get 40% OFF all electronics + FREE EXPRESS SHIPPING today only! Don't miss out!"
+  },
+  {
+    "use_case": "Code Generation",
+    "model": "Claude 3 Haiku",
+    "latency_s": 2.12,
+    "input_tokens": 110,
+    "output_tokens": 300,
+    "estimated_cost_usd": 0.000403,
+    "output": "Here's the Python function `calculate_refund()` that follows the given rules:\n\n```python\ndef calculate_refund(order_total: float, days_since_delivery: int, is_damaged: bool) -> float:\n    \"\"\"\n    Calculates the refund amount based on the order total, days since delivery, and whether the item is damaged.\n\n    Args:\n        order_total (float): The total amount of the order.\n        days_since_delivery (int): The number of days since the order was delivered.\n        is_damaged (bool): Whether the item is damaged or not.\n\n    Returns:\n        float: The refund amount.\n    \"\"\"\n    if is_damaged:\n        return order_total\n    elif days_since_delivery <= 7:\n        return order_total\n    elif 8 <= days_since_delivery <= 14:\n        return order_total * 0.5\n    else:\n        return 0.0\n```\n\nHere's how the function works:\n\n1. The function takes three parameters:\n   - `order_total`: a float representing the total amount of the order.\n   - `days_since_delivery`: an integer representing the number of days since the order was delivered.\n   - `is_damaged`: a boolean indicating whether the item is damaged or not."
+  },
+  {
+    "use_case": "Code Generation",
+    "model": "Claude 3 Sonnet",
+    "latency_s": 3.25,
+    "input_tokens": 110,
+    "output_tokens": 300,
+    "estimated_cost_usd": 0.00483,
+    "output": "Here's the Python function with a docstring and type hints:\n\n```python\ndef calculate_refund(order_total: float, days_since_delivery: int, is_damaged: bool) -> float:\n    \"\"\"\n    Calculate the refund amount based on the given conditions.\n\n    Args:\n        order_total (float): The total cost of the order.\n        days_since_delivery (int): The number of days since the order was delivered.\n        is_damaged (bool): Whether the order is damaged or not.\n\n    Returns:\n        float: The refund amount.\n    \"\"\"\n    if is_damaged:\n        return order_total  # Full refund if the order is damaged\n\n    if days_since_delivery <= 7:\n        return order_total  # Full refund within 7 days\n\n    if 8 <= days_since_delivery <= 14:\n        return order_total * 0.5  # 50% refund between 8 and 14 days\n\n    return 0  # No refund after 14 days\n```\n\nHere's how the function works:\n\n1. The function takes three arguments:\n   - `order_total` (float): The total cost of the order.\n   - `days_since_delivery` (int): The number of days since the order was"
+  },
+  {
+    "use_case": "Code Generation",
+    "model": "Llama 3 8B",
+    "latency_s": 2.53,
+    "input_tokens": 94,
+    "output_tokens": 300,
+    "estimated_cost_usd": 0.000208,
+    "output": "Here is the Python function that meets the requirements:\n```\ndef calculate_refund(order_total: float, days_since_delivery: int, is_damaged: bool) -> float:\n    \"\"\"\n    Calculate the refund amount based on the order total, days since delivery, and damage status.\n\n    Args:\n        order_total (float): The total amount of the original order.\n        days_since_delivery (int): The number of days since the order was delivered.\n        is_damaged (bool): Whether the order was damaged during delivery.\n\n    Returns:\n        float: The refund amount.\n\n    Rules:\n        - If damaged: full refund regardless of days.\n        - If within 7 days: full refund.\n        - If 8-14 days: 50% refund.\n        - If over 14 days: no refund (return 0).\n    \"\"\"\n    if is_damaged:\n        return order_total\n    elif days_since_delivery <= 7:\n        return order_total\n    elif 8 <= days_since_delivery <= 14:\n        return order_total / 2\n    else:\n        return 0\n```\nHere's a breakdown of the code:\n\n* The function takes three arguments: `order_total` (a float), `days_since_delivery` (an integer), and `is_damaged` (a boolean).\n* The function returns a float value representing the refund amount.\n* The docstring explains the purpose of the function, the input arguments, and the return value"
+  }
+]

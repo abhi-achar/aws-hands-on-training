@@ -137,3 +137,19 @@ curl -s -X POST https://r6k62pk8oj.execute-api.ap-south-1.amazonaws.com/prod/ord
 | iam/trust-policy.json | Lambda assume-role trust policy |
 | iam/sfn-invoke-policy.json | Inline policy for Step Functions access |
 | setup_api.py | Script that wires API Gateway to the Lambda and deploys |
+
+## End-to-End Flow, Solution & Service Choices
+1. Client calls  on API Gateway.
+2. API Lambda starts Step Functions execution and returns execution ID.
+3. Client polls  for execution state.
+4. Lambda reads Step Functions execution details and returns normalized status/result.
+
+### Why this solution
+- This pattern exposes long-running orchestration through a simple API contract clients already understand.
+- Asynchronous workflow plus synchronous polling avoids API timeout limits while preserving user experience.
+
+### Why these AWS services
+- API Gateway: standard HTTP interface for external consumers.
+- Lambda: lightweight adapter between API and Step Functions APIs.
+- Step Functions: durable long-running orchestration with execution history.
+- IAM roles/policies: least-privilege control for start/read workflow operations.

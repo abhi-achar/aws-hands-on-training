@@ -81,3 +81,19 @@ curl -s "https://kboq3nibic.execute-api.ap-south-1.amazonaws.com/dev/docs/downlo
 - Upload works only through the generated pre-signed URL.
 - Metadata is stored in DynamoDB.
 - Download URL is time-limited.
+
+## End-to-End Flow, Solution & Service Choices
+1. Client requests upload/download access through API.
+2. Lambda verifies request and generates a pre-signed S3 URL.
+3. Client transfers file directly with S3 using the signed URL.
+4. Lambda stores/retrieves metadata in DynamoDB for indexing and tracking.
+
+### Why this solution
+- Pre-signed URL design removes large-file transfer load from Lambda/API and improves scalability.
+- Short-lived signed access keeps private bucket security while enabling direct client transfer.
+
+### Why these AWS services
+- S3: scalable object storage optimized for file upload/download workflows.
+- Lambda: secure URL generation and metadata orchestration.
+- DynamoDB: fast metadata lookup by document/user keys.
+- API Gateway: secure control plane endpoint for URL issuance.

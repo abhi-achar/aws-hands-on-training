@@ -116,3 +116,20 @@ python rag_assistant.py chat
 - Embeddings + cosine similarity are enough to build a working retriever.
 - A strict prompt ("answer only from context") prevents hallucination and enables citations.
 - The same pattern scales to managed stores (Bedrock Knowledge Bases, OpenSearch) for larger corpora.
+
+## End-to-End Flow, Solution & Service Choices
+1. Knowledge-base markdown documents are chunked into retrieval-ready passages.
+2. Titan Embeddings model converts chunks into vectors and stores them locally.
+3. User question is embedded and matched by cosine similarity.
+4. Top relevant chunks are injected into the prompt as grounding context.
+5. Claude model generates an answer constrained to retrieved context with citations.
+
+### Why this solution
+- RAG improves factual accuracy for domain-specific support without expensive fine-tuning.
+- Retrieval + grounded prompting is faster to update when policies/docs change.
+
+### Why these AWS services
+- Amazon Bedrock: managed access to multiple foundation models with unified API.
+- Titan Embeddings: robust semantic vector generation for retrieval.
+- Claude model family: high-quality instruction following and customer-support response quality.
+- Local vector store (task scope): simple baseline for proving retrieval logic before managed index scale-out.

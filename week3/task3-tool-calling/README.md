@@ -115,3 +115,20 @@ In every case the console shows the `Tool #N:` lines confirming which tools the 
 - With Strands, a tool is just a decorated Python function — its docstring and type hints define the schema.
 - The model orchestrates multiple tools automatically to answer compound questions.
 - Grounding tools (like the Task 2 search API) keep answers accurate and current.
+
+## End-to-End Flow, Solution & Service Choices
+1. User sends a support question to the Strands agent.
+2. Model plans response and decides whether tool calls are needed.
+3. Agent executes one or more tools (help-center search, order status, return eligibility).
+4. Tool outputs are fed back to the model for final grounded response.
+5. Agent returns a single customer-ready answer with real system data.
+
+### Why this solution
+- Tool-calling lets the model use live system functions instead of guessing from parametric memory.
+- It is the practical path to trustworthy support agents that must combine policy and transaction data.
+
+### Why these AWS/services
+- Strands SDK: structured, Python-native framework for Bedrock agent/tool orchestration.
+- Amazon Bedrock models: reasoning and response generation over tool outputs.
+- API Gateway retrieval service (Task 2): reusable semantic search tool backend.
+- Lambda/business rules tooling: deterministic policy checks for non-negotiable decisions.

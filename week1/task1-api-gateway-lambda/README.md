@@ -72,3 +72,18 @@ curl -s https://kboq3nibic.execute-api.ap-south-1.amazonaws.com/dev/api/action-d
 - API Gateway returns HTTP 200.
 - Lambda logs appear in CloudWatch Logs.
 - Each route invokes the correct Lambda function.
+
+## End-to-End Flow, Solution & Service Choices
+1. Client sends an HTTP request to API Gateway.
+2. API Gateway validates route/method and invokes Lambda.
+3. Lambda runs business logic and returns a structured JSON payload.
+4. API Gateway maps Lambda output to HTTP response and returns it to client.
+
+### Why this solution
+- This is the lightest serverless pattern for REST APIs: no server management, fast setup, and pay-per-request pricing.
+- It cleanly separates API concerns (routing/auth/throttling) from compute concerns (business logic).
+
+### Why these AWS services
+- API Gateway: managed HTTP front door with routing, throttling, and easy Lambda integration.
+- Lambda: event-driven compute that scales automatically and removes infrastructure operations.
+- CloudWatch (implicit): native logs/metrics for API and function observability.

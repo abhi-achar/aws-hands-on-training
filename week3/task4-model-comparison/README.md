@@ -108,3 +108,19 @@ Results are saved to `results.json`.
 |------|---------|
 | compare_models.py | Benchmark script (invoke, measure, compare) |
 | results.json | Raw results from the latest run |
+
+## End-to-End Flow, Solution & Service Choices
+1. Define representative support use cases and evaluation prompts.
+2. Run each prompt across selected foundation models.
+3. Capture quality, latency, and cost-related observations.
+4. Aggregate outcomes in results JSON and summarize recommendations.
+5. Select model-by-use-case strategy instead of one-model-for-all.
+
+### Why this solution
+- Model performance is workload-dependent, so empirical benchmarking is required for production decisions.
+- A repeatable comparison method reduces subjective model selection and future migration risk.
+
+### Why these AWS/services
+- Amazon Bedrock: consistent access to multiple model providers under one API.
+- Claude/Llama model families: contrasting quality-speed-cost profiles for portfolio evaluation.
+- JSON artifact output: machine-readable benchmark history for CI/reporting reuse.

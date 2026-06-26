@@ -78,3 +78,19 @@ curl -s -X POST https://lfon6hkqoh.execute-api.ap-south-1.amazonaws.com/dev/orde
 - Logs appear in `/aws/lambda/order-api`.
 - Dashboard shows request count, errors, and latency.
 - Repeated bad requests can trigger `OrderAPI-5XX-Alert`.
+
+## End-to-End Flow, Solution & Service Choices
+1. Client requests hit API Gateway and invoke Lambda.
+2. Lambda emits structured application logs and custom metrics.
+3. CloudWatch aggregates logs/metrics into dashboards.
+4. CloudWatch alarms evaluate thresholds and trigger notifications/actions.
+
+### Why this solution
+- Operational visibility must be built into serverless APIs from day one to reduce mean time to detect and resolve issues.
+- Structured logs plus metrics provide both deep debugging detail and high-level health signals.
+
+### Why these AWS services
+- CloudWatch Logs: centralized, queryable runtime logs for Lambda/API troubleshooting.
+- CloudWatch Metrics & Dashboards: real-time KPIs and visual health tracking.
+- CloudWatch Alarms: automated alerting on latency/error/throughput thresholds.
+- Lambda + API Gateway: native telemetry integration with CloudWatch.

@@ -86,3 +86,18 @@ curl -s -X PUT https://2510k20042.execute-api.ap-south-1.amazonaws.com/dev/produ
 - Missing products return 404.
 - Duplicate products return 409.
 - Error responses are predictable and readable.
+
+## End-to-End Flow, Solution & Service Choices
+1. Client sends request to API Gateway.
+2. Lambda validates payload and executes business logic.
+3. Expected errors are mapped to consistent HTTP status codes and JSON error schema.
+4. API Gateway returns normalized error responses for clients and logs details for operators.
+
+### Why this solution
+- Standardized error contracts improve client reliability and reduce frontend/backend integration friction.
+- Explicit handling of common failures (validation, dependency timeout, not found) improves resilience and user trust.
+
+### Why these AWS services
+- Lambda: centralized place to implement validation, exception mapping, and retry-safe logic.
+- API Gateway: controls response mapping and exposes predictable HTTP semantics.
+- CloudWatch: captures failure telemetry needed for production incident response.

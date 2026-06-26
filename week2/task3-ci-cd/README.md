@@ -128,3 +128,19 @@ https://github.com/abhi-achar/aws-hands-on-training
 - Validate job passes lint and CDK synth.
 - Deploy job updates `OrderProcessingStack`.
 - Stack outputs are printed in the workflow logs.
+
+## End-to-End Flow, Solution & Service Choices
+1. Developer pushes changes to the repository.
+2. GitHub Actions validate job runs linting and template synthesis.
+3. If validation passes, deploy job authenticates to AWS and deploys template.
+4. Pipeline publishes run status for traceability.
+
+### Why this solution
+- Automated pipelines reduce human error and enforce quality gates before cloud changes.
+- CI/CD shortens delivery cycles while preserving deployment consistency across updates.
+
+### Why these AWS/services
+- GitHub Actions: native repo-integrated CI/CD with reusable workflow stages.
+- CloudFormation: deterministic deploy target from synthesized template.
+- IAM + AWS credentials: controlled deployment permissions for automation.
+- CDK synth artifacts: consistent infrastructure package handed to deploy stage.

@@ -141,3 +141,19 @@ aws cloudformation describe-stack-events \
 - Automatic rollback is built into CloudFormation for failed updates; no manual action is required.
 - Rollbacks are atomic: partial successful changes within a failed update are also reverted.
 - Storing template versions (v1, v2) makes manual rollback fast and predictable.
+
+## End-to-End Flow, Solution & Service Choices
+1. Baseline template (v1) is deployed and verified.
+2. Safe change template (v2) is deployed to confirm successful update behavior.
+3. Manual rollback path is validated by redeploying v1.
+4. Broken template (v3) is applied to trigger controlled failure.
+5. CloudFormation auto-rolls back stack to last known good state.
+
+### Why this solution
+- Testing rollback intentionally is essential before production incidents happen.
+- CloudFormation transactional updates provide a safe and observable change-management model.
+
+### Why these AWS services
+- CloudFormation: built-in update transaction semantics and automatic rollback.
+- Lambda (MemorySize change): low-risk resource property ideal for rollback simulation.
+- CloudWatch + stack events: operational evidence for deployment and rollback states.

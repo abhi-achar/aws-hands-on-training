@@ -71,3 +71,19 @@ aws sqs get-queue-attributes   --queue-url https://sqs.ap-south-1.amazonaws.com/
 - CloudWatch Logs for `/aws/lambda/sales-report-generator` show file processing.
 - Email report is received through SNS.
 - DLQ remains empty for successful runs.
+
+## End-to-End Flow, Solution & Service Choices
+1. User uploads a CSV file to S3.
+2. S3 event publishes work to SQS.
+3. Lambda consumes queue messages and processes report logic.
+4. Lambda publishes completion status to SNS for notifications.
+
+### Why this solution
+- Event-driven decoupling absorbs traffic spikes and protects downstream processing.
+- Queue-based buffering improves reliability and retry handling for file-processing workloads.
+
+### Why these AWS services
+- S3: durable, low-cost storage and native event source for object-based workflows.
+- SQS: reliable message buffering, retries, and dead-letter support.
+- Lambda: stateless processing per message with automatic scale.
+- SNS: fan-out notifications to email or downstream subscribers.

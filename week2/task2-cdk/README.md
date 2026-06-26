@@ -98,3 +98,18 @@ aws stepfunctions start-execution   --state-machine-arn arn:aws:states:ap-south-
 - Stack outputs include `StateMachineArn`, `TableName`, and `TopicArn`.
 - Step Functions execution succeeds.
 - DynamoDB table `order-processing-cdk` contains the confirmed order.
+
+## End-to-End Flow, Solution & Service Choices
+1. CDK Python code defines workflow infrastructure as constructs.
+2.  converts constructs into a CloudFormation template.
+3. CloudFormation creates/updates resources in a transactional deployment.
+4. Deployed Step Functions workflow is executed and validated.
+
+### Why this solution
+- Infrastructure as Code ensures repeatable, versioned, and reviewable cloud changes.
+- CDK improves developer productivity with real programming abstractions while still producing standard CloudFormation.
+
+### Why these AWS services
+- AWS CDK: higher-level IaC abstraction with reusable constructs.
+- CloudFormation: managed deployment engine with drift protection and rollback behavior.
+- Step Functions/Lambda/DynamoDB/SNS: core runtime services required by the order workflow.

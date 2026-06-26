@@ -129,3 +129,21 @@ The gift-cards document was uploaded **after** the others and became searchable 
 - Embeddings turn documents and queries into comparable vectors for semantic search.
 - DynamoDB plus in-Lambda cosine similarity is a simple, fully serverless vector store for small to medium corpora.
 - The same pattern upgrades to OpenSearch or a Bedrock Knowledge Base for large-scale retrieval.
+
+## End-to-End Flow, Solution & Service Choices
+1. Team uploads or updates documents in S3.
+2. S3 event triggers ingestion Lambda.
+3. Lambda extracts text, chunks content, generates Titan embeddings, and writes vectors to DynamoDB.
+4. Retrieval API receives query and invokes retrieval Lambda.
+5. Retrieval Lambda embeds query, scores similarity, and returns top matching chunks.
+
+### Why this solution
+- Event-driven ingestion removes manual re-indexing and keeps knowledge search continuously fresh.
+- Serverless components scale with document volume and query traffic while keeping operations minimal.
+
+### Why these AWS services
+- S3: durable content landing zone with native event notifications.
+- Lambda: scalable ingestion/retrieval compute without server management.
+- Bedrock Titan Embeddings: semantic encoding for accurate similarity search.
+- DynamoDB: low-latency storage for vector records and metadata.
+- API Gateway: secure HTTP retrieval endpoint for downstream apps/agents.

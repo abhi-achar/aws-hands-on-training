@@ -122,3 +122,21 @@ Example happy-path response:
 | 4 · Deployment & Rollback | [week2/task4-deployment-rollback](../task4-deployment-rollback) |
 | 5 · Orchestration Integration | [week2/task5-orchestration-integration](../task5-orchestration-integration) |
 | 6 · Weekly Deliverable | this folder |
+
+## End-to-End Flow, Solution & Service Choices
+1. Infrastructure is modeled as CDK and synthesized to CloudFormation.
+2. GitHub Actions validates and deploys cloud resources automatically.
+3. API layer accepts orders and starts Step Functions orchestration.
+4. Workflow runs validation, inventory, payment, and persistence steps.
+5. Monitoring and rollback controls protect production stability.
+
+### Why this solution
+- The combined architecture demonstrates a production-like SDLC: design, deploy, validate, operate, and recover.
+- It balances agility (CI/CD + serverless) with governance (IaC + rollback + monitoring).
+
+### Why these AWS services
+- CDK + CloudFormation: reliable and auditable infrastructure lifecycle.
+- GitHub Actions: automated quality and deployment gates.
+- API Gateway + Lambda: scalable API integration layer.
+- Step Functions: robust orchestration for business transactions.
+- DynamoDB/SNS/CloudWatch: state, notifications, and observability pillars.

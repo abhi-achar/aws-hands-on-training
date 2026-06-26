@@ -92,3 +92,20 @@ Omit required fields like `customerId`, `items`, or `shippingAddress`.
 - Out-of-stock path sends SNS notification and fails with inventory error.
 - Payment failure retries before failing.
 - Successful orders are saved in DynamoDB.
+
+## End-to-End Flow, Solution & Service Choices
+1. Order payload enters the workflow execution.
+2. Step Functions orchestrates validation, inventory check, payment, and update steps.
+3. Choice states branch between success and failure paths.
+4. Retries and catches handle transient failures and route terminal errors.
+5. Success/failure notifications are published and final status is returned.
+
+### Why this solution
+- Multi-step order processing needs explicit orchestration, not ad-hoc chained Lambda calls.
+- State machines provide auditability, retries, branching, and deterministic failure handling.
+
+### Why these AWS services
+- Step Functions: durable orchestration with visual workflow, retries, and error routing.
+- Lambda: independent task functions for each business responsibility.
+- DynamoDB: order state persistence with low-latency updates.
+- SNS: operational/business notifications for workflow outcomes.

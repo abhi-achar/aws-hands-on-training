@@ -77,3 +77,18 @@ curl -s https://kboq3nibic.execute-api.ap-south-1.amazonaws.com/dev/orders/healt
 - Customer order history returns all orders for `C001`.
 - Tracking endpoint returns a timeline sorted by status timestamp.
 - Order metadata and timeline use the same table but different PK/SK patterns.
+
+## End-to-End Flow, Solution & Service Choices
+1. Client submits order-tracking operations through API routes.
+2. Lambda maps each request to DynamoDB access patterns.
+3. DynamoDB serves queries using partition/sort key strategy (and indexes where needed).
+4. API returns low-latency results for create, lookup, and status operations.
+
+### Why this solution
+- Access-pattern-first modeling is the fastest path to predictable DynamoDB performance.
+- Single-table style reduces joins and keeps high-throughput transactional queries simple.
+
+### Why these AWS services
+- DynamoDB: single-digit millisecond reads/writes, seamless scaling, and flexible key design.
+- Lambda: thin compute layer to enforce request validation and key composition rules.
+- API Gateway: consistent HTTP interface for application consumers.

@@ -76,6 +76,15 @@ curl -s "https://kboq3nibic.execute-api.ap-south-1.amazonaws.com/dev/docs?employ
 curl -s "https://kboq3nibic.execute-api.ap-south-1.amazonaws.com/dev/docs/download?employeeId=E001&documentId=<DOC_ID>"
 ```
 
+## Project Files
+| File | Purpose |
+|---|---|
+| lambda_function.py | `document-portal` handler: upload/download pre-signed URLs, metadata listing |
+
+## Troubleshooting
+- **`Internal server error` / JSON decode error on `POST /docs/upload`**: caused by sending a body that is not valid JSON. The handler now returns a clean `400 {"error": "Request body is not valid JSON"}` instead of crashing.
+- **Windows PowerShell/CMD**: single quotes are not stripped, so `-d '{"employeeId":"E001"}'` sends invalid JSON. Escape the quotes (`-d '{\"employeeId\":\"E001\"}'`), use `--data-binary "@body.json"`, or run the request from Git Bash.
+
 ## What to Verify
 - S3 bucket remains private.
 - Upload works only through the generated pre-signed URL.

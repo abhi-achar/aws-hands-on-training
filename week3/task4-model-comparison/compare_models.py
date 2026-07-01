@@ -1,27 +1,30 @@
 """
-Week 3 Task 4: Compare Foundation Models for Different Use Cases.
+Week 3 Task 4: Compare Foundation Models on Tricky Questions.
 
-This benchmark runs 3 Bedrock models across 5 NovaCart-themed use cases and
-measures quality, latency, and output length. Results are printed as a formatted
-comparison table and saved to results.json.
+Instead of easy prompts, this benchmark stresses three Bedrock models with
+deliberately *tricky* questions - ones that contain a catch, a common
+misconception, or a false premise. For every answer each model must return:
+
+  - answer:        its short answer,
+  - confidence:    an integer 0-100 (how sure it is),
+  - justification: one or two sentences of reasoning.
+
+Each question is asked at several temperatures (0.0, 0.5, 1.0) so we can see how
+temperature changes the answer, the confidence, and the correctness. We then
+measure calibration: is a model's confidence actually justified by how often it
+is right? A model that is confidently wrong is worse than one that hedges.
 
 Models:
   - Claude 3 Haiku  (fast, low cost)
   - Claude 3 Sonnet (balanced quality/cost)
   - Llama 3 8B      (open source, fast)
 
-Use cases (all NovaCart-themed):
-  1. Customer support Q&A (short factual answer)
-  2. Summarization (condense a customer complaint)
-  3. Structured extraction (extract JSON from an order email)
-  4. Creative marketing copy (write a promotional message)
-  5. Code generation (write a Python function)
-
 Usage:
   python compare_models.py
 """
 
 import json
+import re
 import time
 
 import boto3
@@ -32,146 +35,176 @@ urllib3.disable_warnings()
 REGION = "ap-south-1"
 br = boto3.client("bedrock-runtime", region_name=REGION, verify=False)
 
+TEMPERATURES = [0.0, 0.5, 1.0]
+MAX_TOKENS = 350
+
 # ──────────────────────────────────────────────────────────────────────────
 # Models
 # ──────────────────────────────────────────────────────────────────────────
 MODELS = [
-    {
-        "label": "Claude 3 Haiku",
-        "id": "anthropic.claude-3-haiku-20240307-v1:0",
-        "provider": "anthropic",
-        "cost_per_1k_input": 0.00025,
-        "cost_per_1k_output": 0.00125,
-    },
-    {
-        "label": "Claude 3 Sonnet",
-        "id": "anthropic.claude-3-sonnet-20240229-v1:0",
-        "provider": "anthropic",
-        "cost_per_1k_input": 0.003,
-        "cost_per_1k_output": 0.015,
-    },
-    {
-        "label": "Llama 3 8B",
-        "id": "meta.llama3-8b-instruct-v1:0",
-        "provider": "meta",
-        "cost_per_1k_input": 0.0003,
-        "cost_per_1k_output": 0.0006,
-    },
+    {"label": "Claude 3 Haiku", "id": "anthropic.claude-3-haiku-20240307-v1:0", "provider": "anthropic"},
+    {"label": "Claude 3 Sonnet", "id": "anthropic.claude-3-sonnet-20240229-v1:0", "provider": "anthropic"},
+    {"label": "Llama 3 8B", "id": "meta.llama3-8b-instruct-v1:0", "provider": "meta"},
 ]
 
 # ──────────────────────────────────────────────────────────────────────────
-# Use Cases
+# Tricky questions (each has a known correct answer or expected behaviour)
 # ──────────────────────────────────────────────────────────────────────────
-USE_CASES = [
+QUESTIONS = [
     {
-        "name": "Customer Support Q&A",
-        "prompt": (
-            "You are NovaCart's support agent. Answer in 1-2 sentences.\n\n"
-            "Customer: I ordered 3 days ago and it still says 'Placed'. When will it ship?\n\n"
-            "Answer:"
+        "name": "Gift card + case (algebra trap)",
+        "type": "reasoning",
+        "question": (
+            "A NovaCart gift card and a phone case cost INR 1100 in total. "
+            "The gift card costs INR 1000 more than the phone case. "
+            "How much does the phone case cost?"
         ),
-        "max_tokens": 100,
-        "eval_criteria": "accuracy, brevity, friendly tone",
+        "expected_answer": "INR 50",
+        "expected_keywords": ["50"],
+        "common_wrong": "INR 100",
     },
     {
-        "name": "Summarization",
-        "prompt": (
-            "Summarize this customer complaint in 2 bullet points:\n\n"
-            "I placed order ORD-5521 on June 15 for a laptop stand and wireless mouse. "
-            "The order was supposed to arrive by June 18 but it's now June 22 and I only "
-            "received the mouse. The laptop stand tracking shows 'In Transit' for 4 days "
-            "with no updates. I called support twice and was told to wait. This is very "
-            "frustrating as I need the stand for my home office setup. I want either "
-            "immediate delivery or a full refund for the missing item.\n\n"
-            "Summary:"
-        ),
-        "max_tokens": 150,
-        "eval_criteria": "completeness, conciseness, key details captured",
+        "name": "Steel vs cotton (misconception)",
+        "type": "reasoning",
+        "question": "Which weighs more: 1 kilogram of steel or 1 kilogram of cotton?",
+        "expected_answer": "They weigh the same (1 kg each)",
+        "expected_keywords": ["same", "equal", "neither", "weigh the same"],
+        "common_wrong": "steel",
     },
     {
-        "name": "Structured Extraction",
-        "prompt": (
-            "Extract order information from this email as JSON with fields: "
-            "order_id, customer_name, issue_type, items_mentioned, urgency (low/medium/high).\n\n"
-            "Email: Hi, I'm Priya Sharma. My order ORD-8834 arrived today but the "
-            "Bluetooth speaker is damaged - the casing is cracked and it won't turn on. "
-            "I need a replacement urgently as it's a birthday gift for tomorrow. "
-            "The headphones in the same order are fine. Please help ASAP.\n\n"
-            "JSON:"
+        "name": "Forklifts survivorship (wording trap)",
+        "type": "reasoning",
+        "question": (
+            "A NovaCart warehouse has 17 forklifts. All but 9 break down. "
+            "How many forklifts are still working?"
         ),
-        "max_tokens": 200,
-        "eval_criteria": "valid JSON, all fields extracted correctly, urgency classification",
+        "expected_answer": "9",
+        "expected_keywords": ["9"],
+        "common_wrong": "8",
     },
     {
-        "name": "Marketing Copy",
-        "prompt": (
-            "Write a short, engaging push notification (max 20 words) for NovaCart's "
-            "flash sale: 40% off all electronics, today only, free express shipping."
+        "name": "Lifetime returns (false premise)",
+        "type": "calibration",
+        "question": (
+            "Using NovaCart's lifetime free-returns guarantee, can I get a full "
+            "refund on a laptop I bought 4 years ago?"
         ),
-        "max_tokens": 80,
-        "eval_criteria": "creativity, urgency, within word limit, brand-appropriate",
+        "expected_answer": "Should flag that no such 'lifetime returns' policy is known / cannot be verified",
+        "expected_keywords": [
+            "no such", "not aware", "cannot confirm", "can't confirm", "unable to verify",
+            "no lifetime", "no record", "not familiar", "would need", "don't have",
+            "do not have", "no information", "not able to verify", "no guarantee",
+            "unaware", "cannot verify", "not sure",
+        ],
+        "common_wrong": "confidently says yes",
     },
     {
-        "name": "Code Generation",
-        "prompt": (
-            "Write a Python function `calculate_refund(order_total, days_since_delivery, "
-            "is_damaged)` that returns the refund amount based on these rules:\n"
-            "- If damaged: full refund regardless of days.\n"
-            "- If within 7 days: full refund.\n"
-            "- If 8-14 days: 50% refund.\n"
-            "- If over 14 days: no refund (return 0).\n"
-            "Include a docstring and type hints."
+        "name": "Packing machines (rate trap)",
+        "type": "reasoning",
+        "question": (
+            "If 5 packing machines take 5 minutes to pack 5 boxes, how long do "
+            "100 packing machines take to pack 100 boxes?"
         ),
-        "max_tokens": 300,
-        "eval_criteria": "correctness, type hints, docstring, handles all cases",
+        "expected_answer": "5 minutes",
+        "expected_keywords": ["5 min", "5 minutes", "five min", "5min"],
+        "common_wrong": "100 minutes",
     },
 ]
+
+PROMPT_TEMPLATE = (
+    "You will be asked a tricky question. It may contain a catch, a common "
+    "misconception, or a false premise, so reason carefully.\n"
+    "Return ONLY a JSON object (no other text) with exactly these keys:\n"
+    '  "answer": a short, direct answer,\n'
+    '  "confidence": an integer from 0 to 100 (how sure you are),\n'
+    '  "justification": one or two sentences explaining your reasoning.\n\n'
+    "Question: {question}"
+)
 
 
 # ──────────────────────────────────────────────────────────────────────────
 # Invoke helpers
 # ──────────────────────────────────────────────────────────────────────────
-def invoke_anthropic(model_id, prompt, max_tokens):
+def invoke_anthropic(model_id, prompt, temperature):
     body = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": max_tokens,
-        "temperature": 0.3,
+        "max_tokens": MAX_TOKENS,
+        "temperature": temperature,
         "messages": [{"role": "user", "content": prompt}],
     }
     t0 = time.time()
     response = br.invoke_model(modelId=model_id, body=json.dumps(body))
     latency = time.time() - t0
     result = json.loads(response["body"].read())
-    text = result["content"][0]["text"]
-    input_tokens = result["usage"]["input_tokens"]
-    output_tokens = result["usage"]["output_tokens"]
-    return text, latency, input_tokens, output_tokens
+    return result["content"][0]["text"], latency
 
 
-def invoke_meta(model_id, prompt, max_tokens):
+def invoke_meta(model_id, prompt, temperature):
     body = {
         "prompt": (
-            f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n"
+            "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n"
             f"{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
         ),
-        "max_gen_len": max_tokens,
-        "temperature": 0.3,
+        "max_gen_len": MAX_TOKENS,
+        # Some Llama endpoints reject exactly 0.0; nudge to a tiny positive value.
+        "temperature": max(temperature, 0.01),
     }
     t0 = time.time()
     response = br.invoke_model(modelId=model_id, body=json.dumps(body))
     latency = time.time() - t0
     result = json.loads(response["body"].read())
-    text = result["generation"]
-    input_tokens = result.get("prompt_token_count", 0)
-    output_tokens = result.get("generation_token_count", 0)
-    return text, latency, input_tokens, output_tokens
+    return result["generation"], latency
 
 
-def invoke_model(model, prompt, max_tokens):
+def invoke_model(model, prompt, temperature):
     if model["provider"] == "anthropic":
-        return invoke_anthropic(model["id"], prompt, max_tokens)
-    else:
-        return invoke_meta(model["id"], prompt, max_tokens)
+        return invoke_anthropic(model["id"], prompt, temperature)
+    return invoke_meta(model["id"], prompt, temperature)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Parsing + grading
+# ──────────────────────────────────────────────────────────────────────────
+def extract_json(text):
+    """Pull the first {...} JSON object out of a model response."""
+    depth = 0
+    start = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    return json.loads(text[start:i + 1])
+                except json.JSONDecodeError:
+                    start = None
+    return None
+
+
+def parse_response(raw):
+    parsed = extract_json(raw)
+    if isinstance(parsed, dict) and "answer" in parsed:
+        answer = str(parsed.get("answer", "")).strip()
+        try:
+            confidence = int(round(float(parsed.get("confidence", -1))))
+        except (TypeError, ValueError):
+            confidence = -1
+        justification = str(parsed.get("justification", "")).strip()
+        return answer, confidence, justification, True
+
+    # Fallback: no clean JSON - use the raw text as the answer.
+    conf_match = re.search(r"confidence\D{0,10}(\d{1,3})", raw, re.IGNORECASE)
+    confidence = int(conf_match.group(1)) if conf_match else -1
+    return raw.strip()[:200], confidence, "", False
+
+
+def grade(question, answer):
+    """True if the answer matches expected behaviour, else False."""
+    text = answer.lower()
+    return any(kw in text for kw in question["expected_keywords"])
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -180,58 +213,112 @@ def invoke_model(model, prompt, max_tokens):
 def main():
     all_results = []
 
-    for uc in USE_CASES:
-        print(f"\n{'='*60}")
-        print(f"Use Case: {uc['name']}")
-        print(f"Eval criteria: {uc['eval_criteria']}")
-        print(f"{'='*60}")
+    for q in QUESTIONS:
+        print(f"\n{'=' * 74}")
+        print(f"Q: {q['name']}  [{q['type']}]")
+        print(f"   {q['question']}")
+        print(f"   Expected: {q['expected_answer']}  (common wrong answer: {q['common_wrong']})")
+        print(f"{'=' * 74}")
+        prompt = PROMPT_TEMPLATE.format(question=q["question"])
 
         for model in MODELS:
-            try:
-                text, latency, in_tok, out_tok = invoke_model(
-                    model, uc["prompt"], uc["max_tokens"]
-                )
-                cost = (
-                    in_tok / 1000 * model["cost_per_1k_input"]
-                    + out_tok / 1000 * model["cost_per_1k_output"]
-                )
-                result = {
-                    "use_case": uc["name"],
-                    "model": model["label"],
-                    "latency_s": round(latency, 2),
-                    "input_tokens": in_tok,
-                    "output_tokens": out_tok,
-                    "estimated_cost_usd": round(cost, 6),
-                    "output": text.strip(),
-                }
-                all_results.append(result)
-                print(f"\n  {model['label']:20} | {latency:.2f}s | {out_tok} tokens | ${cost:.6f}")
-                print(f"  Output: {text.strip()[:120]}...")
-            except Exception as e:
-                print(f"\n  {model['label']:20} | ERROR: {str(e)[:80]}")
-                all_results.append({
-                    "use_case": uc["name"],
-                    "model": model["label"],
-                    "error": str(e)[:200],
-                })
+            for temp in TEMPERATURES:
+                try:
+                    raw, latency = invoke_model(model, prompt, temp)
+                    answer, confidence, justification, parsed_ok = parse_response(raw)
+                    correct = grade(q, answer)
+                    entry = {
+                        "question": q["name"],
+                        "type": q["type"],
+                        "model": model["label"],
+                        "temperature": temp,
+                        "answer": answer,
+                        "confidence": confidence,
+                        "justification": justification,
+                        "correct": correct,
+                        "expected_answer": q["expected_answer"],
+                        "parsed_json": parsed_ok,
+                        "latency_s": round(latency, 2),
+                    }
+                    all_results.append(entry)
+                    flag = "OK " if correct else "XX "
+                    conf_str = f"{confidence:3d}" if confidence >= 0 else "  ?"
+                    print(
+                        f"  {model['label']:16} T={temp:<3} | {flag} | "
+                        f"conf {conf_str} | {answer[:60]}"
+                    )
+                except Exception as e:  # keep going even if one call fails
+                    all_results.append({
+                        "question": q["name"], "type": q["type"],
+                        "model": model["label"], "temperature": temp,
+                        "error": str(e)[:200],
+                    })
+                    print(f"  {model['label']:16} T={temp:<3} | ERROR: {str(e)[:70]}")
 
-    # Save results
-    with open("results.json", "w") as f:
+    with open("results.json", "w", encoding="utf-8") as f:
         json.dump(all_results, f, indent=2)
     print(f"\n\nResults saved to results.json ({len(all_results)} entries)")
 
-    # Print summary table
-    print("\n" + "=" * 80)
-    print("SUMMARY: Latency & Cost Comparison")
-    print("=" * 80)
-    print(f"{'Use Case':<25} {'Model':<20} {'Latency':<10} {'Tokens':<10} {'Cost':<12}")
-    print("-" * 80)
-    for r in all_results:
-        if "error" not in r:
-            print(
-                f"{r['use_case']:<25} {r['model']:<20} {r['latency_s']:<10.2f} "
-                f"{r['output_tokens']:<10} ${r['estimated_cost_usd']:<12.6f}"
-            )
+    print_calibration_summary(all_results)
+    print_temperature_effect(all_results)
+
+
+def print_calibration_summary(results):
+    """Per-model accuracy, average confidence, and overconfidence when wrong."""
+    print("\n" + "=" * 74)
+    print("CALIBRATION SUMMARY (are models as right as they are confident?)")
+    print("=" * 74)
+    print(f"{'Model':16} {'Answers':>7} {'Accuracy':>9} {'AvgConf':>8} "
+          f"{'Conf|Right':>10} {'Conf|Wrong':>11}")
+    print("-" * 74)
+    for model in MODELS:
+        rows = [r for r in results if r["model"] == model["label"] and "error" not in r]
+        if not rows:
+            continue
+        graded = [r for r in rows if r["confidence"] >= 0]
+        n = len(rows)
+        correct = [r for r in rows if r.get("correct")]
+        acc = 100.0 * len(correct) / n if n else 0.0
+        avg_conf = _avg([r["confidence"] for r in graded])
+        conf_right = _avg([r["confidence"] for r in graded if r.get("correct")])
+        conf_wrong = _avg([r["confidence"] for r in graded if not r.get("correct")])
+        print(f"{model['label']:16} {n:>7} {acc:>8.0f}% {avg_conf:>8} "
+              f"{conf_right:>10} {conf_wrong:>11}")
+    print("\nLower 'Conf|Wrong' is better - it means the model hedges when it is wrong.")
+
+
+def print_temperature_effect(results):
+    """Show how many answers flipped correctness between T=0.0 and T=1.0."""
+    print("\n" + "=" * 74)
+    print("TEMPERATURE EFFECT (answer stability from T=0.0 to T=1.0)")
+    print("=" * 74)
+    print(f"{'Model':16} {'Flipped':>8} {'Detail'}")
+    print("-" * 74)
+    for model in MODELS:
+        flips = 0
+        detail = []
+        for q in QUESTIONS:
+            low = _find(results, model["label"], q["name"], 0.0)
+            high = _find(results, model["label"], q["name"], 1.0)
+            if low and high and "error" not in low and "error" not in high:
+                if bool(low.get("correct")) != bool(high.get("correct")):
+                    flips += 1
+                    detail.append(q["name"].split(" (")[0])
+        print(f"{model['label']:16} {flips:>8} {', '.join(detail) if detail else '-'}")
+    print("\nMore flips = more sensitive to temperature (less deterministic).")
+
+
+def _avg(values):
+    values = [v for v in values if isinstance(v, (int, float)) and v >= 0]
+    return round(sum(values) / len(values)) if values else "-"
+
+
+def _find(results, model_label, question_name, temp):
+    for r in results:
+        if (r["model"] == model_label and r["question"] == question_name
+                and r.get("temperature") == temp):
+            return r
+    return None
 
 
 if __name__ == "__main__":

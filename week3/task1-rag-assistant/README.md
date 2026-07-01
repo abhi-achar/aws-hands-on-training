@@ -91,6 +91,24 @@ python rag_assistant.py ask "How long does standard shipping take and is it free
 python rag_assistant.py chat
 ```
 
+### Troubleshooting: Unable to locate credentials
+If you see `NoCredentialsError` or `Unable to locate credentials`, set AWS credentials in the same terminal before running Task 1:
+
+```bash
+export AWS_ACCESS_KEY_ID="<your_access_key>"
+export AWS_SECRET_ACCESS_KEY="<your_secret_key>"
+export AWS_SESSION_TOKEN="<your_session_token>"
+export AWS_REGION="ap-south-1"
+```
+
+Then verify and rerun:
+
+```bash
+aws sts get-caller-identity
+python rag_assistant.py ingest
+python rag_assistant.py ask "How long does standard shipping take and is it free?"
+```
+
 ## Verified Sample Q&A
 
 **Q: How long does standard shipping take and is it free?**

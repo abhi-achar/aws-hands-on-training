@@ -22,6 +22,7 @@ import sys
 
 import boto3
 import numpy as np
+from botocore.exceptions import ClientError, NoCredentialsError
 
 # Bedrock is not reachable over a verified corporate TLS proxy in this account,
 # so we disable SSL verification for the SDK client only.
@@ -40,28 +41,50 @@ TOP_K = 4
 _bedrock = boto3.client("bedrock-runtime", region_name=REGION, verify=False)
 
 
+def _invoke_bedrock(model_id, payload):
+    """Invoke a Bedrock model with actionable error messages."""
+    try:
+        return _bedrock.invoke_model(modelId=model_id, body=json.dumps(payload))
+    except NoCredentialsError as exc:
+        raise RuntimeError(
+            "AWS credentials not found. Configure credentials before running this script. "
+            "Example (Git Bash): export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... "
+            "AWS_SESSION_TOKEN=... AWS_REGION=ap-south-1"
+        ) from exc
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "Unknown")
+        if code in {"ExpiredTokenException", "InvalidClientTokenId", "UnrecognizedClientException"}:
+            raise RuntimeError(
+                "AWS credentials are invalid or expired. Refresh your temporary credentials "
+                "and try again."
+            ) from exc
+        if code in {"AccessDeniedException", "UnauthorizedOperation"}:
+            raise RuntimeError(
+                f"Access denied for model '{model_id}'. Confirm Bedrock model access is enabled in {REGION} "
+                "and your IAM policy allows bedrock:InvokeModel."
+            ) from exc
+        raise RuntimeError(f"Bedrock invoke failed ({code}): {exc}") from exc
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Bedrock helpers
 # ──────────────────────────────────────────────────────────────────────────
 def embed(text):
     """Return the Titan embedding vector for a piece of text."""
-    response = _bedrock.invoke_model(
-        modelId=EMBED_MODEL,
-        body=json.dumps({"inputText": text}),
-    )
+    response = _invoke_bedrock(EMBED_MODEL, {"inputText": text})
     return json.loads(response["body"].read())["embedding"]
 
 
 def generate(prompt):
     """Generate an answer with Claude 3 Haiku."""
-    response = _bedrock.invoke_model(
-        modelId=GEN_MODEL,
-        body=json.dumps({
+    response = _invoke_bedrock(
+        GEN_MODEL,
+        {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 600,
             "temperature": 0.2,
             "messages": [{"role": "user", "content": prompt}],
-        }),
+        },
     )
     return json.loads(response["body"].read())["content"][0]["text"]
 
@@ -185,17 +208,21 @@ def main():
         print(__doc__)
         return
     command = sys.argv[1]
-    if command == "ingest":
-        ingest()
-    elif command == "ask":
-        if len(sys.argv) < 3:
-            print('Usage: python rag_assistant.py ask "your question"')
-            return
-        print(ask(" ".join(sys.argv[2:])))
-    elif command == "chat":
-        chat()
-    else:
-        print(__doc__)
+    try:
+        if command == "ingest":
+            ingest()
+        elif command == "ask":
+            if len(sys.argv) < 3:
+                print('Usage: python rag_assistant.py ask "your question"')
+                return
+            print(ask(" ".join(sys.argv[2:])))
+        elif command == "chat":
+            chat()
+        else:
+            print(__doc__)
+    except RuntimeError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

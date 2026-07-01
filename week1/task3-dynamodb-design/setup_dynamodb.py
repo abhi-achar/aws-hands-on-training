@@ -96,68 +96,91 @@ SAMPLE_STATUS_EVENTS = [
 # ──────────────────────────────────────────────────────────────────────────
 # Create
 # ──────────────────────────────────────────────────────────────────────────
-def _table_exists(name):
+ORDERS_CREATE = dict(
+    TableName=ORDERS_TABLE,
+    BillingMode="PAY_PER_REQUEST",
+    AttributeDefinitions=[
+        {"AttributeName": "OrderId", "AttributeType": "S"},
+        {"AttributeName": "CustomerId", "AttributeType": "S"},
+        {"AttributeName": "RestaurantId", "AttributeType": "S"},
+        {"AttributeName": "OrderCreatedAt", "AttributeType": "S"},
+    ],
+    KeySchema=[
+        {"AttributeName": "OrderId", "KeyType": "HASH"},
+    ],
+    GlobalSecondaryIndexes=[
+        {
+            "IndexName": "CustomerOrdersIndex",
+            "KeySchema": [
+                {"AttributeName": "CustomerId", "KeyType": "HASH"},
+                {"AttributeName": "OrderCreatedAt", "KeyType": "RANGE"},
+            ],
+            "Projection": {"ProjectionType": "ALL"},
+        },
+        {
+            "IndexName": "RestaurantOrdersIndex",
+            "KeySchema": [
+                {"AttributeName": "RestaurantId", "KeyType": "HASH"},
+                {"AttributeName": "OrderCreatedAt", "KeyType": "RANGE"},
+            ],
+            "Projection": {"ProjectionType": "ALL"},
+        },
+    ],
+)
+
+STATUS_CREATE = dict(
+    TableName=STATUS_TABLE,
+    BillingMode="PAY_PER_REQUEST",
+    AttributeDefinitions=[
+        {"AttributeName": "OrderId", "AttributeType": "S"},
+        {"AttributeName": "StatusTimestamp", "AttributeType": "S"},
+    ],
+    KeySchema=[
+        {"AttributeName": "OrderId", "KeyType": "HASH"},
+        {"AttributeName": "StatusTimestamp", "KeyType": "RANGE"},
+    ],
+)
+
+
+def _describe(name):
     try:
-        _client.describe_table(TableName=name)
-        return True
+        return _client.describe_table(TableName=name)["Table"]
     except _client.exceptions.ResourceNotFoundException:
-        return False
+        return None
+
+
+def _table_exists(name):
+    return _describe(name) is not None
+
+
+def _key_schema(desc):
+    return [(k["AttributeName"], k["KeyType"]) for k in desc["KeySchema"]]
+
+
+def _delete_and_wait(name):
+    _client.delete_table(TableName=name)
+    _client.get_waiter("table_not_exists").wait(TableName=name)
+
+
+def _ensure_table(create_kwargs):
+    """Create the table, or recreate it if an existing table has a different key schema."""
+    name = create_kwargs["TableName"]
+    expected = [(k["AttributeName"], k["KeyType"]) for k in create_kwargs["KeySchema"]]
+    desc = _describe(name)
+    if desc and _key_schema(desc) != expected:
+        print(f"  {name} exists with a different key schema {_key_schema(desc)}; recreating ...")
+        _delete_and_wait(name)
+        desc = None
+    if desc is None:
+        _client.create_table(**create_kwargs)
+        print(f"  creating {name} ...")
+    else:
+        print(f"  {name} already exists (schema OK)")
 
 
 def create_tables():
-    if _table_exists(ORDERS_TABLE):
-        print(f"  {ORDERS_TABLE} already exists")
-    else:
-        _client.create_table(
-            TableName=ORDERS_TABLE,
-            BillingMode="PAY_PER_REQUEST",
-            AttributeDefinitions=[
-                {"AttributeName": "OrderId", "AttributeType": "S"},
-                {"AttributeName": "CustomerId", "AttributeType": "S"},
-                {"AttributeName": "RestaurantId", "AttributeType": "S"},
-                {"AttributeName": "OrderCreatedAt", "AttributeType": "S"},
-            ],
-            KeySchema=[
-                {"AttributeName": "OrderId", "KeyType": "HASH"},
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    "IndexName": "CustomerOrdersIndex",
-                    "KeySchema": [
-                        {"AttributeName": "CustomerId", "KeyType": "HASH"},
-                        {"AttributeName": "OrderCreatedAt", "KeyType": "RANGE"},
-                    ],
-                    "Projection": {"ProjectionType": "ALL"},
-                },
-                {
-                    "IndexName": "RestaurantOrdersIndex",
-                    "KeySchema": [
-                        {"AttributeName": "RestaurantId", "KeyType": "HASH"},
-                        {"AttributeName": "OrderCreatedAt", "KeyType": "RANGE"},
-                    ],
-                    "Projection": {"ProjectionType": "ALL"},
-                },
-            ],
-        )
-        print(f"  creating {ORDERS_TABLE} (with CustomerOrdersIndex, RestaurantOrdersIndex) ...")
-
-    if _table_exists(STATUS_TABLE):
-        print(f"  {STATUS_TABLE} already exists")
-    else:
-        _client.create_table(
-            TableName=STATUS_TABLE,
-            BillingMode="PAY_PER_REQUEST",
-            AttributeDefinitions=[
-                {"AttributeName": "OrderId", "AttributeType": "S"},
-                {"AttributeName": "StatusTimestamp", "AttributeType": "S"},
-            ],
-            KeySchema=[
-                {"AttributeName": "OrderId", "KeyType": "HASH"},
-                {"AttributeName": "StatusTimestamp", "KeyType": "RANGE"},
-            ],
-        )
-        print(f"  creating {STATUS_TABLE} ...")
-
+    _ensure_table(ORDERS_CREATE)
+    _ensure_table(STATUS_CREATE)
     for name in (ORDERS_TABLE, STATUS_TABLE):
         _client.get_waiter("table_exists").wait(TableName=name)
         print(f"  {name} is ACTIVE")

@@ -1,7 +1,7 @@
 # Task 2: Document Ingestion & Retrieval Workflow
 
 ## Goal
-Build an automated, event-driven document ingestion and retrieval pipeline on AWS. Documents dropped into S3 are **automatically** extracted, chunked, embedded with Amazon Bedrock, and stored as vectors in DynamoDB. A search API then retrieves the most relevant chunks for any query using semantic similarity.
+Build an automated, event-driven document ingestion and retrieval pipeline on AWS using a **managed Amazon Bedrock Knowledge Base**. Documents dropped into S3 are **automatically** parsed, chunked, embedded with Amazon Titan, and indexed into an Amazon OpenSearch Serverless vector store by the Knowledge Base. A search API then retrieves the most relevant chunks for any query using the Knowledge Base `Retrieve` API.
 
 This is the production backbone that a RAG assistant (Task 1) sits on top of: Task 1 was a local script with in-memory vectors; Task 2 is a real serverless service where ingestion happens automatically on upload and retrieval is exposed over HTTP.
 
@@ -14,28 +14,27 @@ flowchart TD
     subgraph Ingestion["📥 Ingestion (event-driven)"]
         Upload(["📄 Upload document"]):::client
         S3["🪣 S3<br/><b>novacart-kb-documents</b><br/>documents/"]:::storage
-        IngLambda["λ Ingestion Lambda<br/><b>novacart-kb-ingest</b>"]:::lambda
-        EmbedI["🧠 Bedrock<br/>Titan Embeddings V2"]:::bedrock
+        IngLambda["λ Trigger Lambda<br/><b>novacart-kb-ingest</b>"]:::lambda
     end
-    subgraph Storage["🗄️ Vector Store"]
-        DDB["DynamoDB<br/><b>novacart-kb-vectors</b><br/>chunk + embedding"]:::db
+    subgraph KB["🧠 Amazon Bedrock Knowledge Base"]
+        KBsvc["<b>novacart-knowledge-base</b><br/>parse + chunk + embed (Titan)"]:::bedrock
+        OSS["🔎 OpenSearch Serverless<br/>vector index (novacart-kb-index)"]:::db
     end
     subgraph Retrieval["🔍 Retrieval (on demand)"]
-        Client(["🧑‍💻 Search client"]):::client
+        Client(["🧑‍💻 Search client / agent"]):::client
         APIGW["🌐 API Gateway<br/><b>NovaCartKBSearchAPI</b>"]:::apigw
         RetLambda["λ Retrieval Lambda<br/><b>novacart-kb-retrieve</b>"]:::lambda
-        EmbedR["🧠 Bedrock<br/>Titan Embeddings V2"]:::bedrock
     end
 
     Upload ==>|"PUT documents/*.md"| S3
     S3 ==>|"s3:ObjectCreated event"| IngLambda
-    IngLambda -->|"embed each chunk"| EmbedI
-    IngLambda ==>|"put vectors"| DDB
+    IngLambda ==>|"StartIngestionJob"| KBsvc
+    KBsvc --> OSS
     Client ==>|"POST /search"| APIGW
     APIGW --> RetLambda
-    RetLambda -->|"embed query"| EmbedR
-    RetLambda ==>|"scan + cosine"| DDB
-    RetLambda -.->|"top-K chunks"| Client
+    RetLambda ==>|"Retrieve API"| KBsvc
+    OSS -.->|"top-K cited chunks"| RetLambda
+    RetLambda -.->|"results"| Client
 
     classDef client fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238
     classDef storage fill:#569A31,stroke:#3F7222,stroke-width:2px,color:#ffffff
@@ -45,18 +44,19 @@ flowchart TD
     classDef apigw fill:#A166FF,stroke:#7C3AED,stroke-width:2px,color:#ffffff
 ```
 
-## Why DynamoDB as the Vector Store
-A managed vector database (OpenSearch Serverless, Aurora pgvector) is ideal at large scale, but for this workflow a serverless DynamoDB table is used: it needs no provisioning, stores each chunk's embedding as a JSON string, and the retrieval Lambda computes cosine similarity in pure Python. This keeps the example fully serverless and free of cluster management.
+## Why a Managed Bedrock Knowledge Base
+Amazon Bedrock Knowledge Bases provide fully managed RAG: they parse documents, chunk them, embed each chunk with Amazon Titan, and store/search the vectors in Amazon OpenSearch Serverless. Instead of maintaining custom chunking, embedding, and cosine-similarity code, the pipeline simply calls the Knowledge Base `Retrieve` API and gets ranked, cited results. This removes undifferentiated heavy lifting and scales to large corpora with real approximate-nearest-neighbour vector search.
 
 ## Resources Created
 | Service | Resource | Purpose |
 |---|---|---|
 | S3 | novacart-kb-documents-353211646521 | Document drop zone (documents/ prefix) |
-| DynamoDB | novacart-kb-vectors | Stores chunks + embeddings (PK: chunkId) |
-| Lambda | novacart-kb-ingest | S3-triggered: chunk + embed + store |
-| Lambda | novacart-kb-retrieve | API-triggered: embed query + similarity search |
+| Bedrock Knowledge Base | novacart-knowledge-base | Managed RAG: parse, chunk, embed, index, retrieve |
+| OpenSearch Serverless | bedrock-knowledge-base-a4msz1 / index novacart-kb-index | Vector store for the Knowledge Base |
+| Lambda | novacart-kb-ingest | S3-triggered: starts a KB ingestion job |
+| Lambda | novacart-kb-retrieve | API-triggered: calls the KB Retrieve API |
 | API Gateway | NovaCartKBSearchAPI | POST /search endpoint (prod stage) |
-| IAM Role | novacart-kb-pipeline-role | S3 read, DynamoDB R/W, Bedrock invoke |
+| IAM Role | AmazonBedrockExecutionRoleForKB-novacart | KB access to S3 + Bedrock + OpenSearch |
 
 ## Bedrock Model
 | Role | Model |
@@ -77,15 +77,15 @@ Returns the top-K chunks with their source document and cosine score.
 ## How It Works
 ### Ingestion (automatic)
 1. A document is uploaded to `s3://novacart-kb-documents-.../documents/`.
-2. S3 emits an `ObjectCreated` event that invokes the ingestion Lambda.
-3. The Lambda reads the file, normalises line endings, and splits it into ~700-character overlapping chunks.
-4. Each chunk is embedded with Titan and written to DynamoDB with its source and text.
+2. S3 emits an `ObjectCreated` event that invokes the ingestion trigger Lambda.
+3. The Lambda calls the Bedrock Knowledge Base `StartIngestionJob` API.
+4. The managed Knowledge Base parses, chunks, embeds (Titan), and indexes the content into the OpenSearch Serverless vector store.
 
 ### Retrieval (on demand)
 1. A client calls `POST /search` with a query.
-2. The retrieval Lambda embeds the query with Titan.
-3. It scans the vector table and computes cosine similarity for every chunk in pure Python.
-4. It returns the top-K most similar chunks, each with its source and score.
+2. The retrieval Lambda calls the Knowledge Base `Retrieve` API.
+3. The Knowledge Base embeds the query and runs vector search in OpenSearch Serverless.
+4. It returns the top-K most relevant chunks, each with its source document and relevance score.
 
 ## How to Run / Demo
 
@@ -104,46 +104,48 @@ curl -s -X POST https://tdf4du7z9g.execute-api.ap-south-1.amazonaws.com/prod/sea
 ```
 
 ## Verified Results
-After uploading the 5 NovaCart help-center docs (16 chunks total):
+After the Knowledge Base ingestion job completed (6 NovaCart help-center docs indexed, 0 failed), the KB `Retrieve` API returns:
 
 | Query | Top Source | Score |
 |---|---|---|
-| "How long do refunds take to reach my account?" | returns-refunds.md | 0.33 |
-| "Can I cancel my order after it ships?" | orders-tracking.md | 0.40 |
-| "Do gift cards expire?" (new doc) | gift-cards.md | 0.33 |
+| "How long do refunds take to reach my account?" | returns-refunds.md | 0.40 |
+| "Can I cancel my order after it ships?" | orders-tracking.md | 0.54 |
 
-The gift-cards document was uploaded **after** the others and became searchable within seconds — proving the ingestion is fully automatic and incremental.
+Uploading a new document to the S3 data source triggers the ingestion Lambda, which starts a Knowledge Base ingestion job — so new content becomes searchable automatically, with no manual re-indexing.
 
 ## Files
 | File | Purpose |
 |---|---|
-| lambda/ingest_handler.py | S3-triggered ingestion Lambda |
-| lambda/retrieve_handler.py | API-triggered retrieval Lambda |
-| iam/trust-policy.json | Lambda assume-role trust policy |
-| iam/pipeline-policy.json | S3 + DynamoDB + Bedrock permissions |
+| setup_knowledge_base.py | Provisions the KB (reuse index, create KB + S3 data source, run ingestion, test retrieval) |
+| lambda/ingest_handler.py | S3-triggered Lambda that starts a KB ingestion job |
+| lambda/retrieve_handler.py | API-triggered Lambda that calls the KB Retrieve API |
+| iam/kb-trust-policy.json | KB execution role trust policy |
+| iam/kb-execution-policy.json | KB role: S3 read + Bedrock invoke + OpenSearch access |
+| iam/kb-data-access-policy.json | OpenSearch Serverless data-access policy |
+| iam/kb-lambda-policy.json | Lambda role: bedrock:Retrieve + StartIngestionJob |
 | s3-notification.json | S3 event notification configuration |
 | setup_search_api.py | Wires API Gateway to the retrieval Lambda |
 
 ## Key Takeaways
-- Event-driven ingestion (S3 → Lambda) removes manual indexing entirely.
-- Embeddings turn documents and queries into comparable vectors for semantic search.
-- DynamoDB plus in-Lambda cosine similarity is a simple, fully serverless vector store for small to medium corpora.
-- The same pattern upgrades to OpenSearch or a Bedrock Knowledge Base for large-scale retrieval.
+- Event-driven ingestion (S3 -> Lambda -> KB ingestion job) removes manual indexing entirely.
+- A managed Bedrock Knowledge Base handles parsing, chunking, embedding, and vector search — no custom similarity code.
+- OpenSearch Serverless provides real approximate-nearest-neighbour vector search that scales far beyond a hand-rolled store.
+- The retrieval API keeps the same request/response shape, so consumers (the Task 3 agent) need no changes.
 
 ## End-to-End Flow, Solution & Service Choices
-1. Team uploads or updates documents in S3.
-2. S3 event triggers ingestion Lambda.
-3. Lambda extracts text, chunks content, generates Titan embeddings, and writes vectors to DynamoDB.
-4. Retrieval API receives query and invokes retrieval Lambda.
-5. Retrieval Lambda embeds query, scores similarity, and returns top matching chunks.
+1. Team uploads or updates documents in the S3 data source.
+2. S3 event triggers the ingestion Lambda, which calls the Knowledge Base `StartIngestionJob`.
+3. The managed Knowledge Base parses, chunks, embeds (Titan), and indexes content into OpenSearch Serverless.
+4. The retrieval API invokes the retrieval Lambda, which calls the Knowledge Base `Retrieve` API.
+5. The Knowledge Base returns the top matching chunks with source and score.
 
 ### Why this solution
-- Event-driven ingestion removes manual re-indexing and keeps knowledge search continuously fresh.
+- A managed Knowledge Base removes undifferentiated RAG plumbing (chunking, embedding, vector-store ops) and stays fresh via automatic ingestion.
 - Serverless components scale with document volume and query traffic while keeping operations minimal.
 
 ### Why these AWS services
 - S3: durable content landing zone with native event notifications.
-- Lambda: scalable ingestion/retrieval compute without server management.
-- Bedrock Titan Embeddings: semantic encoding for accurate similarity search.
-- DynamoDB: low-latency storage for vector records and metadata.
+- Amazon Bedrock Knowledge Base: managed parsing, chunking, embedding, and retrieval.
+- OpenSearch Serverless: managed vector store with approximate-nearest-neighbour search.
+- Lambda: thin event-driven glue for ingestion triggers and retrieval.
 - API Gateway: secure HTTP retrieval endpoint for downstream apps/agents.

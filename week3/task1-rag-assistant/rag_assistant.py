@@ -1,27 +1,23 @@
 """
-NovaCart Support Assistant - a simple RAG (Retrieval-Augmented Generation)
-assistant built on Amazon Bedrock.
+NovaCart Support Assistant - a RAG (Retrieval-Augmented Generation) assistant
+built on Amazon Bedrock.
 
-Pipeline:
-  1. Ingest: read help-center docs, split into chunks, embed each chunk with
-     Amazon Titan Text Embeddings V2, and save a local vector store (JSON).
-  2. Ask: embed the user question, retrieve the most similar chunks by cosine
-     similarity, build a grounded prompt, and generate an answer with
-     Anthropic Claude 3 Haiku - citing the source documents.
+Retrieval is served by a managed Amazon Bedrock Knowledge Base (vector store =
+OpenSearch Serverless), provisioned in Week 3 Task 2. This script:
+  1. Retrieves the most relevant help-center chunks for the question via the
+     Knowledge Base Retrieve API.
+  2. Builds a grounded prompt and generates an answer with Anthropic Claude 3
+     Haiku - citing the source documents.
 
 Usage:
-  python rag_assistant.py ingest
   python rag_assistant.py ask "How long does shipping take?"
   python rag_assistant.py chat          # interactive loop
 """
 
-import glob
 import json
-import os
 import sys
 
 import boto3
-import numpy as np
 from botocore.exceptions import ClientError, NoCredentialsError
 
 # Bedrock is not reachable over a verified corporate TLS proxy in this account,
@@ -30,15 +26,30 @@ import urllib3
 urllib3.disable_warnings()
 
 REGION = "ap-south-1"
-EMBED_MODEL = "amazon.titan-embed-text-v2:0"
 GEN_MODEL = "anthropic.claude-3-haiku-20240307-v1:0"
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-KB_DIR = os.path.join(HERE, "knowledge_base")
-STORE_PATH = os.path.join(HERE, "vector_store.json")
+KB_NAME = "novacart-knowledge-base"
 TOP_K = 4
 
 _bedrock = boto3.client("bedrock-runtime", region_name=REGION, verify=False)
+_agent_runtime = boto3.client("bedrock-agent-runtime", region_name=REGION, verify=False)
+_kb_id = None
+
+
+def _get_kb_id():
+    """Resolve the Knowledge Base id by name (cached)."""
+    global _kb_id
+    if _kb_id is None:
+        control = boto3.client("bedrock-agent", region_name=REGION, verify=False)
+        for kb in control.list_knowledge_bases(maxResults=100)["knowledgeBaseSummaries"]:
+            if kb["name"] == KB_NAME:
+                _kb_id = kb["knowledgeBaseId"]
+                break
+        else:
+            raise RuntimeError(
+                f"Knowledge base '{KB_NAME}' not found. Create it via "
+                "week3/task2-doc-ingestion/setup_knowledge_base.py"
+            )
+    return _kb_id
 
 
 def _invoke_bedrock(model_id, payload):
@@ -69,12 +80,6 @@ def _invoke_bedrock(model_id, payload):
 # ──────────────────────────────────────────────────────────────────────────
 # Bedrock helpers
 # ──────────────────────────────────────────────────────────────────────────
-def embed(text):
-    """Return the Titan embedding vector for a piece of text."""
-    response = _invoke_bedrock(EMBED_MODEL, {"inputText": text})
-    return json.loads(response["body"].read())["embedding"]
-
-
 def generate(prompt):
     """Generate an answer with Claude 3 Haiku."""
     response = _invoke_bedrock(
@@ -90,84 +95,47 @@ def generate(prompt):
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Ingestion: chunk docs and build the vector store
+# Retrieval (Bedrock Knowledge Base) + generation
 # ──────────────────────────────────────────────────────────────────────────
-def _chunk_markdown(text):
-    """Split a markdown doc into chunks at '## ' section boundaries."""
-    chunks = []
-    current = []
-    for line in text.splitlines():
-        if line.startswith("## ") and current:
-            chunks.append("\n".join(current).strip())
-            current = [line]
-        else:
-            current.append(line)
-    if current:
-        chunks.append("\n".join(current).strip())
-    return [c for c in chunks if c]
+def _retrieve(question, top_k=TOP_K):
+    """Retrieve the most relevant help-center chunks from the Knowledge Base."""
+    try:
+        response = _agent_runtime.retrieve(
+            knowledgeBaseId=_get_kb_id(),
+            retrievalQuery={"text": question},
+            retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": top_k}},
+        )
+    except NoCredentialsError as exc:
+        raise RuntimeError(
+            "AWS credentials not found. Configure credentials before running this script."
+        ) from exc
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "Unknown")
+        raise RuntimeError(f"Knowledge Base retrieve failed ({code}): {exc}") from exc
+
+    hits = []
+    for item in response.get("retrievalResults", []):
+        uri = item.get("location", {}).get("s3Location", {}).get("uri", "")
+        source = uri.rsplit("/", 1)[-1] if uri else "help-center"
+        hits.append({
+            "source": source,
+            "score": round(item.get("score", 0.0), 4),
+            "text": item["content"]["text"],
+        })
+    return hits
 
 
-def ingest():
-    """Read all knowledge base docs, embed their chunks, save the vector store."""
-    records = []
-    doc_paths = sorted(glob.glob(os.path.join(KB_DIR, "*.md")))
-    if not doc_paths:
-        print(f"No documents found in {KB_DIR}")
-        return
+def ask(question, show_sources=True):
+    """Answer a question using context retrieved from the Knowledge Base."""
+    hits = _retrieve(question)
 
-    for path in doc_paths:
-        source = os.path.basename(path)
-        with open(path, "r", encoding="utf-8") as handle:
-            text = handle.read()
-        for i, chunk in enumerate(_chunk_markdown(text)):
-            vector = embed(chunk)
-            records.append({
-                "id": f"{source}#{i}",
-                "source": source,
-                "text": chunk,
-                "embedding": vector,
-            })
-            print(f"  embedded {source}#{i} ({len(chunk)} chars)")
-
-    with open(STORE_PATH, "w", encoding="utf-8") as handle:
-        json.dump(records, handle)
-    print(f"\nIngested {len(records)} chunks from {len(doc_paths)} documents -> {STORE_PATH}")
-
-
-# ──────────────────────────────────────────────────────────────────────────
-# Retrieval + generation
-# ──────────────────────────────────────────────────────────────────────────
-def _load_store():
-    if not os.path.exists(STORE_PATH):
-        print("Vector store not found. Run: python rag_assistant.py ingest")
-        sys.exit(1)
-    with open(STORE_PATH, "r", encoding="utf-8") as handle:
-        records = json.load(handle)
-    matrix = np.array([r["embedding"] for r in records], dtype=np.float32)
-    return records, matrix
-
-
-def _cosine_top_k(query_vec, matrix, k):
-    query = np.array(query_vec, dtype=np.float32)
-    query_norm = query / (np.linalg.norm(query) + 1e-9)
-    matrix_norm = matrix / (np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-9)
-    scores = matrix_norm @ query_norm
-    top_idx = np.argsort(scores)[::-1][:k]
-    return [(int(i), float(scores[i])) for i in top_idx]
-
-
-def ask(question, records=None, matrix=None, show_sources=True):
-    """Answer a question using retrieved context from the knowledge base."""
-    if records is None:
-        records, matrix = _load_store()
-
-    query_vec = embed(question)
-    hits = _cosine_top_k(query_vec, matrix, TOP_K)
+    if not hits:
+        return ("I don't have that information in the NovaCart help-center. "
+                "Please contact support for help.")
 
     context_blocks = []
-    for rank, (idx, score) in enumerate(hits, 1):
-        rec = records[idx]
-        context_blocks.append(f"[Source {rank}: {rec['source']}]\n{rec['text']}")
+    for rank, hit in enumerate(hits, 1):
+        context_blocks.append(f"[Source {rank}: {hit['source']}]\n{hit['text']}")
     context = "\n\n".join(context_blocks)
 
     prompt = (
@@ -182,14 +150,13 @@ def ask(question, records=None, matrix=None, show_sources=True):
 
     answer = generate(prompt)
     if show_sources:
-        sources = ", ".join(sorted({records[i]["source"] for i, _ in hits}))
+        sources = ", ".join(sorted({hit["source"] for hit in hits}))
         answer += f"\n\nSources used: {sources}"
     return answer
 
 
 def chat():
     """Interactive question loop."""
-    records, matrix = _load_store()
     print("NovaCart Support Assistant (type 'exit' to quit)\n")
     while True:
         try:
@@ -200,7 +167,7 @@ def chat():
             break
         if not question:
             continue
-        print("\nAssistant:", ask(question, records, matrix), "\n")
+        print("\nAssistant:", ask(question), "\n")
 
 
 def main():
@@ -210,7 +177,9 @@ def main():
     command = sys.argv[1]
     try:
         if command == "ingest":
-            ingest()
+            print("Ingestion is handled by the managed Knowledge Base. Upload "
+                  "documents to the S3 data source (Week 3 Task 2); the pipeline "
+                  "embeds and indexes them automatically.")
         elif command == "ask":
             if len(sys.argv) < 3:
                 print('Usage: python rag_assistant.py ask "your question"')

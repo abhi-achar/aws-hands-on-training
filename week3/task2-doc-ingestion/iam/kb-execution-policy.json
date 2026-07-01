@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeEmbeddingModel",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:ap-south-1::foundation-model/amazon.titan-embed-text-v2:0"
+      ]
+    },
+    {
+      "Sid": "OpenSearchServerlessAccess",
+      "Effect": "Allow",
+      "Action": [
+        "aoss:APIAccessAll"
+      ],
+      "Resource": [
+        "arn:aws:aoss:ap-south-1:353211646521:collection/gx3lj008w2ctdz2fdwn5"
+      ]
+    },
+    {
+      "Sid": "ReadKnowledgeBaseDocuments",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::novacart-kb-documents-353211646521",
+        "arn:aws:s3:::novacart-kb-documents-353211646521/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceAccount": "353211646521"
+        }
+      }
+    }
+  ]
+}

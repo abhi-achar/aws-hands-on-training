@@ -1,0 +1,36 @@
+[
+  {
+    "Rules": [
+      {
+        "ResourceType": "collection",
+        "Resource": [
+          "collection/bedrock-knowledge-base-a4msz1"
+        ],
+        "Permission": [
+          "aoss:DescribeCollectionItems",
+          "aoss:CreateCollectionItems",
+          "aoss:UpdateCollectionItems"
+        ]
+      },
+      {
+        "ResourceType": "index",
+        "Resource": [
+          "index/bedrock-knowledge-base-a4msz1/*"
+        ],
+        "Permission": [
+          "aoss:CreateIndex",
+          "aoss:DescribeIndex",
+          "aoss:UpdateIndex",
+          "aoss:DeleteIndex",
+          "aoss:ReadDocument",
+          "aoss:WriteDocument"
+        ]
+      }
+    ],
+    "Principal": [
+      "arn:aws:iam::353211646521:role/AmazonBedrockExecutionRoleForKB-novacart",
+      "arn:aws:iam::353211646521:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_landing-zone-custom-admin_c52b85352ef8f2da",
+      "arn:aws:sts::353211646521:assumed-role/AWSReservedSSO_landing-zone-custom-admin_c52b85352ef8f2da/abhishek.a@fractal.ai"
+    ]
+  }
+]

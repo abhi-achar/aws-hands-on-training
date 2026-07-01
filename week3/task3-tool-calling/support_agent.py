@@ -20,7 +20,6 @@ Usage:
 import sys
 
 import boto3
-import requests
 import urllib3
 
 urllib3.disable_warnings()
@@ -42,7 +41,25 @@ from strands.models import BedrockModel  # noqa: E402
 
 REGION = "ap-south-1"
 MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
-SEARCH_API = "https://tdf4du7z9g.execute-api.ap-south-1.amazonaws.com/prod/search"
+KB_NAME = "novacart-knowledge-base"
+
+# Bedrock Knowledge Base retrieval. Resolve the KB id by name once, then reuse.
+_kb_runtime = boto3.client("bedrock-agent-runtime", region_name=REGION)
+_kb_id = None
+
+
+def _get_kb_id():
+    global _kb_id
+    if _kb_id is None:
+        control = boto3.client("bedrock-agent", region_name=REGION)
+        for kb in control.list_knowledge_bases(maxResults=100)["knowledgeBaseSummaries"]:
+            if kb["name"] == KB_NAME:
+                _kb_id = kb["knowledgeBaseId"]
+                break
+        else:
+            raise RuntimeError(f"Knowledge base '{KB_NAME}' not found")
+    return _kb_id
+
 
 # A small simulated order system. In production this tool would call an
 # internal order-management API or database.
@@ -88,10 +105,12 @@ def search_help_center(query: str) -> str:
         query: The customer's question or search phrase.
     """
     try:
-        response = requests.post(
-            SEARCH_API, json={"query": query, "topK": 3}, verify=False, timeout=20
+        response = _kb_runtime.retrieve(
+            knowledgeBaseId=_get_kb_id(),
+            retrievalQuery={"text": query},
+            retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": 3}},
         )
-        results = response.json().get("results", [])
+        results = response.get("retrievalResults", [])
     except Exception as exc:  # network/parse safety at the tool boundary
         return f"Help-center search is unavailable right now ({exc})."
 
@@ -99,7 +118,10 @@ def search_help_center(query: str) -> str:
         return "No relevant help-center articles were found."
     snippets = []
     for r in results:
-        snippets.append(f"From {r['source']} (score {r['score']}): {r['text']}")
+        uri = r.get("location", {}).get("s3Location", {}).get("uri", "")
+        source = uri.rsplit("/", 1)[-1] if uri else "help-center"
+        score = round(r.get("score", 0.0), 4)
+        snippets.append(f"From {source} (score {score}): {r['content']['text']}")
     return "\n\n".join(snippets)
 
 

@@ -6,7 +6,7 @@ Build an AI agent that uses **tool-calling** (function calling) with the open-so
 ## Real-World Example
 A **NovaCart AI customer-support agent**. It is the natural "agent" layer on top of the services built earlier in Week 3: it can look up orders, apply return-policy rules, and search the help-center — and it answers questions that require combining several of these.
 
-The help-center search tool calls the **real document-retrieval API from Task 2**, so this is genuine cross-task integration, not a mock.
+The help-center search tool queries the **Amazon Bedrock Knowledge Base from Task 2** directly (via the `Retrieve` API), so this is genuine cross-task integration, not a mock.
 
 ## Architecture
 ```mermaid
@@ -21,7 +21,7 @@ flowchart TD
         T2["📦 get_order_status"]:::tool
         T3["↩️ check_return_eligibility"]:::tool
     end
-    API["🌐 Task 2 Retrieval API<br/>/search"]:::ext
+    API["🧠 Task 2 Bedrock<br/>Knowledge Base (Retrieve)"]:::ext
     Orders["🗂️ Order system<br/>(simulated)"]:::ext
     Rules["📋 Return-policy rules"]:::ext
 
@@ -54,7 +54,7 @@ The `@tool` decorator turns a normal Python function into a tool — its name, d
 ## The Tools
 | Tool | What it does | Backing system |
 |------|--------------|----------------|
-| `search_help_center(query)` | Semantic search of NovaCart policies | **Real** — calls the Task 2 retrieval API |
+| `search_help_center(query)` | Semantic search of NovaCart policies | **Real** — queries the Task 2 Bedrock Knowledge Base |
 | `get_order_status(order_id)` | Returns order status and details | Simulated order system (in-code) |
 | `check_return_eligibility(category, days)` | Applies the 7-day / non-returnable rules | Business logic |
 
@@ -85,7 +85,7 @@ python support_agent.py
 
 **2. Real API integration — help-center search**
 > Q: "How long do refunds take to reach my bank account?"
-> → Agent calls `search_help_center` (→ Task 2 API) → "UPI 1–2 days, cards 3–5 days, initiated within 24h of inspection."
+> → Agent calls `search_help_center` (→ Task 2 Knowledge Base) → "UPI 1–2 days, cards 3–5 days, initiated within 24h of inspection."
 
 **3. Multi-tool chaining — order + policy**
 > Q: "I want to return my order ORD-1003. Is it eligible?"
@@ -104,7 +104,7 @@ In every case the console shows the `Tool #N:` lines confirming which tools the 
 | File | Purpose |
 |------|---------|
 | support_agent.py | The Strands agent and its three tools |
-| requirements.txt | Strands SDK + boto3 + requests |
+| requirements.txt | Strands SDK + boto3 |
 
 ## Notes
 - A small boto3 patch forces `verify=False` on all clients so Bedrock works through the corporate TLS proxy.
@@ -114,7 +114,7 @@ In every case the console shows the `Tool #N:` lines confirming which tools the 
 - Tool-calling lets an LLM take actions and fetch live data instead of guessing.
 - With Strands, a tool is just a decorated Python function — its docstring and type hints define the schema.
 - The model orchestrates multiple tools automatically to answer compound questions.
-- Grounding tools (like the Task 2 search API) keep answers accurate and current.
+- Grounding tools (like the Task 2 Knowledge Base) keep answers accurate and current.
 
 ## End-to-End Flow, Solution & Service Choices
 1. User sends a support question to the Strands agent.
@@ -130,5 +130,5 @@ In every case the console shows the `Tool #N:` lines confirming which tools the 
 ### Why these AWS/services
 - Strands SDK: structured, Python-native framework for Bedrock agent/tool orchestration.
 - Amazon Bedrock models: reasoning and response generation over tool outputs.
-- API Gateway retrieval service (Task 2): reusable semantic search tool backend.
+- Amazon Bedrock Knowledge Base (Task 2): reusable managed semantic-search tool backend.
 - Lambda/business rules tooling: deterministic policy checks for non-negotiable decisions.

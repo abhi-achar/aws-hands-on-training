@@ -1,56 +1,23 @@
 """
 Retrieval Lambda - the query side of the document ingestion & retrieval workflow.
 
-Exposed through API Gateway (POST /search):
+Exposed through API Gateway (POST /search). Retrieval is delegated to a managed
+Amazon Bedrock Knowledge Base (vector store = OpenSearch Serverless):
   1. Accepts a search query.
-  2. Embeds the query with Amazon Titan Text Embeddings V2 (Bedrock).
-  3. Scans the DynamoDB vector table and computes cosine similarity in pure
-     Python (no numpy layer needed).
-  4. Returns the top-K most relevant chunks with their source and score.
+  2. Calls the Bedrock Knowledge Base Retrieve API (it embeds the query with
+     Titan and runs vector search internally).
+  3. Returns the top-K most relevant chunks with their source and score.
 """
 
 import json
-import math
 import os
 
 import boto3
 
-dynamodb = boto3.resource("dynamodb")
-bedrock = boto3.client("bedrock-runtime")
+agent_runtime = boto3.client("bedrock-agent-runtime")
 
-TABLE_NAME = os.environ["TABLE_NAME"]
-EMBED_MODEL = os.environ.get("EMBED_MODEL", "amazon.titan-embed-text-v2:0")
+KB_ID = os.environ["KB_ID"]
 DEFAULT_TOP_K = int(os.environ.get("TOP_K", "4"))
-
-table = dynamodb.Table(TABLE_NAME)
-
-
-def _embed(text):
-    response = bedrock.invoke_model(
-        modelId=EMBED_MODEL,
-        body=json.dumps({"inputText": text}),
-    )
-    return json.loads(response["body"].read())["embedding"]
-
-
-def _cosine(a, b):
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot / (norm_a * norm_b)
-
-
-def _scan_all():
-    """Read every chunk from the vector table (handles pagination)."""
-    items = []
-    response = table.scan()
-    items.extend(response["Items"])
-    while "LastEvaluatedKey" in response:
-        response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
-        items.extend(response["Items"])
-    return items
 
 
 def _response(status_code, body):
@@ -64,6 +31,11 @@ def _response(status_code, body):
     }
 
 
+def _source_name(result):
+    uri = result.get("location", {}).get("s3Location", {}).get("uri", "")
+    return uri.rsplit("/", 1)[-1] if uri else "unknown"
+
+
 def lambda_handler(event, context):
     try:
         payload = json.loads(event.get("body") or "{}")
@@ -75,21 +47,18 @@ def lambda_handler(event, context):
         return _response(400, {"error": "Missing 'query' in request body"})
     top_k = int(payload.get("topK", DEFAULT_TOP_K))
 
-    query_vec = _embed(query)
+    response = agent_runtime.retrieve(
+        knowledgeBaseId=KB_ID,
+        retrievalQuery={"text": query},
+        retrievalConfiguration={"vectorSearchConfiguration": {"numberOfResults": top_k}},
+    )
 
-    scored = []
-    for item in _scan_all():
-        embedding = json.loads(item["embedding"])
-        score = _cosine(query_vec, embedding)
-        scored.append((score, item))
-
-    scored.sort(key=lambda pair: pair[0], reverse=True)
     results = []
-    for score, item in scored[:top_k]:
+    for item in response.get("retrievalResults", []):
         results.append({
-            "source": item["source"],
-            "score": round(score, 4),
-            "text": item["text"],
+            "source": _source_name(item),
+            "score": round(item.get("score", 0.0), 4),
+            "text": item["content"]["text"],
         })
 
     return _response(200, {

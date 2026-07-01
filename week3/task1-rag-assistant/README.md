@@ -14,26 +14,20 @@ A plain LLM does not know NovaCart's shipping fees or return window, and may inv
 ## Architecture
 ```mermaid
 flowchart TD
-    subgraph Ingest["📥 Ingestion (one-time)"]
-        Docs["📄 Help-center docs<br/>knowledge_base/*.md"]:::doc
-        Chunk["✂️ Chunk by section"]:::proc
-        EmbedDoc["λ Titan Embeddings V2<br/>amazon.titan-embed-text-v2"]:::bedrock
-        Store["🗃️ Vector store<br/>vector_store.json"]:::store
+    subgraph KB["🧠 Bedrock Knowledge Base (Week 3 Task 2)"]
+        OSS["🔎 OpenSearch Serverless<br/>vector index"]:::store
     end
     subgraph Query["💬 Query (per question)"]
         Q(["🧑‍💻 Customer question"]):::client
-        EmbedQ["λ Titan Embeddings V2"]:::bedrock
-        Retrieve["🔍 Cosine similarity<br/>top-K chunks"]:::proc
+        Retrieve["λ KB Retrieve API<br/>managed vector search"]:::bedrock
         Prompt["🧩 Build grounded prompt<br/>context + question"]:::proc
         Gen["λ Claude 3 Haiku<br/>anthropic.claude-3-haiku"]:::bedrock
         Ans(["✅ Grounded answer<br/>+ source citations"]):::client
     end
-    Docs --> Chunk --> EmbedDoc --> Store
-    Q --> EmbedQ --> Retrieve
-    Store -.->|"vectors"| Retrieve
+    Q --> Retrieve
+    KB -.->|"top-K cited chunks"| Retrieve
     Retrieve --> Prompt --> Gen --> Ans
 
-    classDef doc fill:#569A31,stroke:#3F7222,stroke-width:2px,color:#ffffff
     classDef proc fill:#455A64,stroke:#263238,stroke-width:2px,color:#ffffff
     classDef bedrock fill:#FF9900,stroke:#E88B00,stroke-width:2px,color:#ffffff
     classDef store fill:#4053D6,stroke:#2E3FA8,stroke-width:2px,color:#ffffff
@@ -46,9 +40,10 @@ flowchart TD
 | Embeddings | `amazon.titan-embed-text-v2:0` | 1024-dim vectors for documents and queries |
 | Generation | `anthropic.claude-3-haiku-20240307-v1:0` | Fast, low-cost grounded answer generation |
 
-A pure in-memory vector store (JSON + NumPy cosine similarity) is used instead of
-OpenSearch or a managed Bedrock Knowledge Base, so the example is fully
-self-contained and needs no extra infrastructure.
+Retrieval is served by the managed Amazon Bedrock Knowledge Base provisioned in
+Week 3 Task 2 (vector store = Amazon OpenSearch Serverless). This script resolves
+the Knowledge Base by name and calls its `Retrieve` API, then generates the
+answer with Claude 3 Haiku - citing the source documents.
 
 ## Knowledge Base
 | Document | Topics |
@@ -62,10 +57,9 @@ self-contained and needs no extra infrastructure.
 ## Project Files
 | File | Purpose |
 |------|---------|
-| rag_assistant.py | The full RAG pipeline (ingest, retrieve, generate) |
-| knowledge_base/ | Source help-center documents |
-| vector_store.json | Generated embeddings (created by `ingest`) |
-| requirements.txt | Python dependencies (boto3, numpy) |
+| rag_assistant.py | RAG pipeline: Knowledge Base retrieve + Claude generation with citations |
+| knowledge_base/ | Source help-center documents (uploaded to the KB's S3 data source in Task 2) |
+| requirements.txt | Python dependency (boto3) |
 
 ## How to Run
 
@@ -75,18 +69,14 @@ cd week3/task1-rag-assistant
 pip install -r requirements.txt
 ```
 
-### 2. Build the knowledge base (embed documents)
-```bash
-python rag_assistant.py ingest
-```
-This embeds every document chunk with Titan and writes `vector_store.json`.
+Retrieval uses the managed Knowledge Base from Task 2 — there is no local ingestion step. Ensure that Knowledge Base exists first (see `week3/task2-doc-ingestion`).
 
-### 3. Ask a question
+### 2. Ask a question
 ```bash
 python rag_assistant.py ask "How long does standard shipping take and is it free?"
 ```
 
-### 4. Interactive chat
+### 3. Interactive chat
 ```bash
 python rag_assistant.py chat
 ```
@@ -105,7 +95,6 @@ Then verify and rerun:
 
 ```bash
 aws sts get-caller-identity
-python rag_assistant.py ingest
 python rag_assistant.py ask "How long does standard shipping take and is it free?"
 ```
 
@@ -124,30 +113,29 @@ python rag_assistant.py ask "How long does standard shipping take and is it free
 > The assistant declines: this information is not in the knowledge base, and suggests contacting support. (No hallucination.)
 
 ## How It Works (Code Walkthrough)
-1. **Ingest** — each markdown doc is split into chunks at `##` section headers; each chunk is embedded with Titan and stored with its source filename.
-2. **Retrieve** — the question is embedded, then compared to all chunk vectors using cosine similarity; the top 4 chunks are selected.
-3. **Augment** — the retrieved chunks are inserted into a prompt that instructs the model to answer only from the context and cite sources.
-4. **Generate** — Claude 3 Haiku produces a concise, grounded answer with citations.
+1. **Retrieve** — the question is sent to the Bedrock Knowledge Base `Retrieve` API, which embeds it and runs vector search in OpenSearch Serverless; the top chunks come back with source and score.
+2. **Augment** — the retrieved chunks are inserted into a prompt that instructs the model to answer only from the context and cite sources.
+3. **Generate** — Claude 3 Haiku produces a concise, grounded answer with citations.
 
 ## Key Takeaways
 - RAG grounds an LLM in private data without retraining the model.
-- Embeddings + cosine similarity are enough to build a working retriever.
+- A managed Bedrock Knowledge Base handles embedding and vector search, so the app only retrieves and generates.
 - A strict prompt ("answer only from context") prevents hallucination and enables citations.
-- The same pattern scales to managed stores (Bedrock Knowledge Bases, OpenSearch) for larger corpora.
+- The same retrieve-then-generate pattern scales from a handful of docs to large corpora.
 
 ## End-to-End Flow, Solution & Service Choices
-1. Knowledge-base markdown documents are chunked into retrieval-ready passages.
-2. Titan Embeddings model converts chunks into vectors and stores them locally.
-3. User question is embedded and matched by cosine similarity.
-4. Top relevant chunks are injected into the prompt as grounding context.
-5. Claude model generates an answer constrained to retrieved context with citations.
+1. Help-center documents are ingested into the Task 2 Bedrock Knowledge Base (OpenSearch Serverless vector store).
+2. The user question is sent to the Knowledge Base `Retrieve` API.
+3. The Knowledge Base embeds the query and returns the top relevant chunks with sources.
+4. Retrieved chunks are injected into the prompt as grounding context.
+5. Claude generates an answer constrained to the retrieved context, with citations.
 
 ### Why this solution
 - RAG improves factual accuracy for domain-specific support without expensive fine-tuning.
 - Retrieval + grounded prompting is faster to update when policies/docs change.
 
 ### Why these AWS services
-- Amazon Bedrock: managed access to multiple foundation models with unified API.
-- Titan Embeddings: robust semantic vector generation for retrieval.
+- Amazon Bedrock: managed access to foundation models and Knowledge Bases under one API.
+- Bedrock Knowledge Base + Titan embeddings: managed chunking, embedding, and retrieval.
+- OpenSearch Serverless: managed vector store with approximate-nearest-neighbour search.
 - Claude model family: high-quality instruction following and customer-support response quality.
-- Local vector store (task scope): simple baseline for proving retrieval logic before managed index scale-out.

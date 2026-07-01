@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "KnowledgeBaseRetrieveAndIngest",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:Retrieve",
+        "bedrock:StartIngestionJob"
+      ],
+      "Resource": "arn:aws:bedrock:ap-south-1:353211646521:knowledge-base/WDQ2SYYAZ0"
+    }
+  ]
+}
